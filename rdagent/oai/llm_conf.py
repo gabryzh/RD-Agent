@@ -9,7 +9,10 @@ from rdagent.core.conf import ExtendedBaseSettings
 
 
 class LLMSettings(ExtendedBaseSettings):
-    # backend
+    """
+    LLM 设置类，用于配置语言模型的行为。
+    """
+    # 后端设置
     backend: str = "rdagent.oai.backend.LiteLLMAPIBackend"
 
     chat_model: str = "gpt-4-turbo"
@@ -17,17 +20,17 @@ class LLMSettings(ExtendedBaseSettings):
 
     reasoning_effort: Literal["low", "medium", "high"] | None = None
     enable_response_schema: bool = True
-    # Whether to enable response_schema in chat models. may not work for models that do not support it.
+    # 是否在聊天模型中启用响应模式。对于不支持的模型可能不起作用。
 
-    # Handling format
+    # 格式处理
     reasoning_think_rm: bool = False
     """
-    Some LLMs include <think>...</think> tags in their responses, which can interfere with the main output.
-    Set reasoning_think_rm to True to remove any <think>...</think> content from responses.
+    一些 LLM 在其响应中包含 <think>...</think> 标签，这可能会干扰主要输出。
+    将 reasoning_think_rm 设置为 True 以从响应中删除任何 <think>...</think> 内容。
     """
 
-    # TODO: most of the settings are only used on deprec.DeprecBackend.
-    # So they should move the settings to that folder.
+    # TODO: 大多数设置仅在 deprec.DeprecBackend 中使用。
+    # 所以应该将这些设置移动到该文件夹。
 
     log_llm_chat_content: bool = True
 
@@ -49,20 +52,19 @@ class LLMSettings(ExtendedBaseSettings):
     timeout_fail_limit: int = 10
     violation_fail_limit: int = 1
 
-    # Behavior of returning answers to the same question when caching is enabled
+    # 启用缓存时返回相同问题答案的行为
     use_auto_chat_cache_seed_gen: bool = False
     """
-    `_create_chat_completion_inner_function` provides a feature to pass in a seed to affect the cache hash key
-    We want to enable a auto seed generator to get different default seed for `_create_chat_completion_inner_function`
-    if seed is not given.
-    So the cache will only not miss you ask the same question on same round.
+    `_create_chat_completion_inner_function` 提供了一个传入种子以影响缓存哈希键的功能。
+    我们希望启用一个自动种子生成器，以便在未给出种子的情况下为 `_create_chat_completion_inner_function` 获取不同的默认种子。
+    因此，只有在同一轮中问相同的问题时，缓存才不会丢失。
     """
     init_chat_cache_seed: int = 42
 
-    # Chat configs
-    openai_api_key: str = ""  # TODO: simplify the key design.
+    # 聊天配置
+    openai_api_key: str = ""  # TODO: 简化密钥设计。
     chat_openai_api_key: str | None = None
-    chat_openai_base_url: str | None = None  #
+    chat_openai_base_url: str | None = None
     chat_azure_api_base: str = ""
     chat_azure_api_version: str = ""
     chat_max_tokens: int | None = None
@@ -72,14 +74,14 @@ class LLMSettings(ExtendedBaseSettings):
     chat_frequency_penalty: float = 0.0
     chat_presence_penalty: float = 0.0
     chat_token_limit: int = (
-        100000  # 100000 is the maximum limit of gpt4, which might increase in the future version of gpt
+        100000  # 100000 是 gpt4 的最大限制，未来版本的 gpt 可能会增加
     )
-    default_system_prompt: str = "You are an AI assistant who helps to answer user's questions."
+    default_system_prompt: str = "你是一个AI助手，帮助回答用户的问题。"
     system_prompt_role: str = "system"
-    """Some models (like o1) do not support the 'system' role.
-    Therefore, we make the system_prompt_role customizable to ensure successful calls."""
+    """一些模型（如 o1）不支持“系统”角色。
+    因此，我们将 system_prompt_role 设置为可自定义，以确保成功调用。"""
 
-    # Embedding configs
+    # 嵌入配置
     embedding_openai_api_key: str = ""
     embedding_openai_base_url: str = ""
     embedding_azure_api_base: str = ""
@@ -87,15 +89,15 @@ class LLMSettings(ExtendedBaseSettings):
     embedding_max_str_num: int = 50
     embedding_max_length: int = 8192
 
-    # offline llama2 related config
+    # 离线 llama2 相关配置
     use_llama2: bool = False
     llama2_ckpt_dir: str = "Llama-2-7b-chat"
     llama2_tokenizer_path: str = "Llama-2-7b-chat/tokenizer.model"
     llams2_max_batch_size: int = 8
 
-    # server served endpoints
+    # 服务器提供的端点
     use_gcr_endpoint: bool = False
-    gcr_endpoint_type: str = "llama2_70b"  # or "llama3_70b", "phi2", "phi3_4k", "phi3_128k"
+    gcr_endpoint_type: str = "llama2_70b"  # 或 "llama3_70b", "phi2", "phi3_4k", "phi3_128k"
 
     llama2_70b_endpoint: str = ""
     llama2_70b_endpoint_key: str = ""

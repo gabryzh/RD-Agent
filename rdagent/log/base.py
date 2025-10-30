@@ -10,33 +10,33 @@ from typing import Literal, Optional
 
 @dataclass
 class Message:
-    """The info unit of the storage"""
+    """存储的信息单元"""
 
-    tag: str  # namespace like like a.b.c
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]  # The level of the logging
-    timestamp: datetime  # The time when the message is generated
+    tag: str  # 命名空间，如 a.b.c
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]  # 日志级别
+    timestamp: datetime  # 消息生成的时间
     caller: Optional[
         str
-    ]  # The caller of the logging like `rdagent.oai.llm_utils:_create_chat_completion_inner_function:55`(file:func:line)
-    pid_trace: Optional[str]  # The process id trace;  A-B-C represents A create B, B create C
-    content: object  # The content
+    ]  # 日志调用者，如 `rdagent.oai.llm_utils:_create_chat_completion_inner_function:55`(文件:函数:行号)
+    pid_trace: Optional[str]  # 进程ID跟踪；A-B-C 表示 A 创建 B，B 创建 C
+    content: object  # 内容
 
 
 class Storage:
     """
-    Basic storage to support saving objects;
+    基础存储，支持保存对象；
 
-    # Usage:
+    # 用法:
 
-    The storage has mainly two kind of users:
-    - The logging end: you can choose any of the following method to use the object
-        - We can use it directly with the native logging storage
-        - We can use it with other logging tools; For example, serve as a handler for loggers
-    - The view end:
-        - Mainly for the subclass of `logging.base.View`
-        - It should provide two kind of ways to provide content
-            - offline content provision.
-            - online content preovision.
+    存储主要有两种用户：
+    - 日志记录端：您可以选择以下任一方法使用该对象
+        - 我们可以直接使用原生日志存储
+        - 我们可以将其与其他日志工具一起使用；例如，作为日志记录器的处理程序
+    - 查看端：
+        - 主要用于 `logging.base.View` 的子类
+        - 它应提供两种提供内容的方式
+            - 离线内容提供。
+            - 在线内容提供。
     """
 
     @abstractmethod
@@ -48,32 +48,32 @@ class Storage:
     ) -> str | Path:
         """
 
-        Parameters
+        参数
         ----------
         obj : object
-            The object for logging.
+            要记录的对象。
         name : str
-            The name of the object.  For example "a.b.c"
-            We may log a lot of objects to a same name
+            对象的名称。例如 "a.b.c"
+            我们可能会将许多对象记录到同一个名称下
 
-        Returns
+        返回
         -------
         str | Path
-            The storage identifier of the object.
+            对象的存储标识符。
         """
         ...
 
     @abstractmethod
     def iter_msg(self) -> Generator[Message, None, None]:
         """
-        Iterate the message in the storage.
+        迭代存储中的消息。
         """
         ...
 
     @abstractmethod
     def truncate(self, time: datetime) -> None:
         """
-        Remove all log entries after the specified time.
+        删除指定时间之后的所有日志条目。
         """
         ...
 
@@ -83,21 +83,21 @@ class Storage:
 
 class View:
     """
-    Motivation:
+    动机:
 
-    Display the content in the storage
+    显示存储中的内容
     """
 
-    # TODO: pleas fix me
+    # TODO: 请修复我
     @abstractmethod
     def display(self, s: Storage, watch: bool = False) -> None:
         """
 
-        Parameters
+        参数
         ----------
         s : Storage
-
+            存储对象
         watch : bool
-            should we watch the new content and display them
+            我们是否应该监视新内容并显示它们
         """
         ...

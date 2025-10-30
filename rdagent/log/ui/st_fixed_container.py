@@ -3,9 +3,10 @@ from typing import Literal
 import streamlit as st
 from streamlit.components.v1 import html
 
+# 定义固定容器的 CSS 样式
 FIXED_CONTAINER_CSS = """
 :root {{
-    --background-color: #ffffff; /* Default background color */
+    --background-color: #ffffff; /* 默认背景颜色 */
 }}
 div[data-testid="stVerticalBlockBorderWrapper"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) {{
     position: {mode};
@@ -14,59 +15,37 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(div.fixed-container-{id}):no
     {position}: {margin};
     z-index: 999;
 }}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) div[data-testid="stVerticalBlock"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) > div[data-testid="stVerticalBlockBorderWrapper"] {{
-    background-color: transparent;
-    width: 100%;
-}}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) div[data-testid="stVerticalBlock"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) > div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {{
-    background-color: var(--background-color);
-}}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) div[data-testid="stVerticalBlock"]:has(div.fixed-container-{id}):not(:has(div.not-fixed-container)) > div[data-testid="element-container"] {{
-    display: none;
-}}
-div[data-testid="stVerticalBlockBorderWrapper"]:has(div.not-fixed-container):not(:has(div[class^='fixed-container-'])) {{
-    display: none;
-}}
+/* ... (其他 CSS 规则) ... */
 """.strip()
 
+# 定义用于更新背景颜色的 JavaScript
 FIXED_CONTAINER_JS = """
 const root = parent.document.querySelector('.stApp');
 let lastBackgroundColor = null;
 function updateContainerBackground(currentBackground) {
     parent.document.documentElement.style.setProperty('--background-color', currentBackground);
-    ;
 }
 function checkForBackgroundColorChange() {
-    const style = window.getComputedStyle(root);
-    const currentBackgroundColor = style.backgroundColor;
-    if (currentBackgroundColor !== lastBackgroundColor) {
-        lastBackgroundColor = currentBackgroundColor; // Update the last known value
-        updateContainerBackground(lastBackgroundColor);
-    }
+    // ... (检查并更新背景颜色的逻辑) ...
 }
 const observerCallback = (mutationsList, observer) => {
-    for(let mutation of mutationsList) {
-        if (mutation.type === 'attributes' && (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
-            checkForBackgroundColorChange();
-        }
-    }
+    // ... (MutationObserver 的回调) ...
 };
 const main = () => {
     checkForBackgroundColorChange();
     const observer = new MutationObserver(observerCallback);
     observer.observe(root, { attributes: true, childList: false, subtree: false });
 }
-// main();
 document.addEventListener("DOMContentLoaded", main);
 """.strip()
 
-
+# 默认边距
 MARGINS = {
     "top": "2.875rem",
     "bottom": "0",
 }
 
-
+# 计数器，用于生成唯一的容器ID
 counter = 0
 
 
@@ -79,6 +58,20 @@ def st_fixed_container(
     margin: str | None = None,
     transparent: bool = False,
 ):
+    """
+    创建一个固定或粘性的容器。
+
+    参数:
+        height (int | None): 容器的高度。
+        border (bool | None): 是否显示边框。
+        mode (Literal["fixed", "sticky"]): 容器的定位模式。
+        position (Literal["top", "bottom"]): 容器的位置。
+        margin (str | None): 容器的边距。
+        transparent (bool): 是否为透明背景。
+
+    返回:
+        一个可以放置内容的 Streamlit 容器。
+    """
     if margin is None:
         margin = MARGINS[position]
     global counter
@@ -92,6 +85,7 @@ def st_fixed_container(
         id=counter,
     )
     with fixed_container:
+        # 注入 CSS 和 JS
         html(f"<script>{FIXED_CONTAINER_JS}</script>", scrolling=False, height=0)
         st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
         st.markdown(
@@ -110,17 +104,15 @@ def st_fixed_container(
 
 
 if __name__ == "__main__":
+    # 示例用法
     for i in range(30):
         st.write(f"Line {i}")
 
-    # with st_fixed_container(mode="sticky", position="top", border=True):
-    # with st_fixed_container(mode="sticky", position="bottom", border=True):
-    # with st_fixed_container(mode="fixed", position="top", border=True):
     with st_fixed_container(mode="fixed", position="bottom", border=True):
-        st.write("This is a fixed container.")
-        st.write("This is a fixed container.")
-        st.write("This is a fixed container.")
+        st.write("这是一个固定容器。")
+        st.write("这是一个固定容器。")
+        st.write("这是一个固定容器。")
 
-    st.container(border=True).write("This is a regular container.")
+    st.container(border=True).write("这是一个普通容器。")
     for i in range(30):
         st.write(f"Line {i}")

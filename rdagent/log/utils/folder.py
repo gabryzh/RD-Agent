@@ -1,5 +1,5 @@
 """
-This module provides some useful functions for working with logger folders.
+该模块提供了一些用于处理日志文件夹的实用函数。
 """
 
 import pickle
@@ -12,9 +12,19 @@ from rdagent.utils.workflow import LoopBase
 
 
 def get_first_session_file_after_duration(log_folder: str | Path, duration: str | pd.Timedelta) -> Path:
+    """
+    在指定持续时间后获取第一个会话文件。
+
+    Args:
+        log_folder (str | Path): 日志文件夹的路径。
+        duration (str | pd.Timedelta): 持续时间。
+
+    Returns:
+        Path: 第一个会话文件的路径。
+    """
     log_folder = Path(log_folder)
     duration_dt = pd.Timedelta(duration)
-    # iterate the dump steps in increasing order
+    # 按升序迭代转储步骤
     files = sorted(
         (log_folder / "__session__").glob("*/*_*"), key=lambda f: (int(f.parent.name), int(f.name.split("_")[0]))
     )
@@ -26,25 +36,27 @@ def get_first_session_file_after_duration(log_folder: str | Path, duration: str 
         all_duration = timer.all_duration
         remain_time_duration = timer.remain_time()
         if all_duration is None or remain_time_duration is None:
-            msg = "Timer is not configured"
+            msg = "计时器未配置"
             raise ValueError(msg)
         time_spent = all_duration - remain_time_duration
         if time_spent >= duration_dt:
             break
     if fp is None:
-        msg = f"No session file found after duration {duration}"
+        msg = f"在持续时间 {duration} 后未找到会话文件"
         raise ValueError(msg)
     return fp
 
 
 def first_li_si_after_one_time(log_path: Path, hours: int = 12) -> tuple[int, int, str]:
     """
-    Based on the hours, find the stop loop id and step id (the first step after <hours> hours).
+    根据小时数，找到停止的循环 ID 和步骤 ID（在 <hours> 小时后的第一个步骤）。
+
     Args:
-        log_path (Path): The path to the log folder (contains many log traces).
-        hours (int): The number of hours to stat.
+        log_path (Path): 日志文件夹的路径（包含许多日志跟踪）。
+        hours (int): 用于统计的小时数。
+
     Returns:
-        tuple[int, int, str]: The loop id, step id and function name.
+        tuple[int, int, str]: 循环 ID、步骤 ID 和函数名。
     """
     session_path = log_path / "__session__"
     max_li = max(int(p.name) for p in session_path.iterdir() if p.is_dir() and p.name.isdigit())

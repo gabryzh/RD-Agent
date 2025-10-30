@@ -8,7 +8,7 @@ from typing import Any, Optional, TypedDict, cast
 
 class LogColors:
     """
-    ANSI color codes for use in console output.
+    用于控制台输出的 ANSI 颜色代码。
     """
 
     RED = "\033[91m"
@@ -28,23 +28,24 @@ class LogColors:
 
     @classmethod
     def get_all_colors(cls: type["LogColors"]) -> list:
+        """获取所有定义的颜色代码。"""
         names = dir(cls)
         names = [name for name in names if not name.startswith("__") and not callable(getattr(cls, name))]
         return [getattr(cls, name) for name in names]
 
     def render(self, text: str, color: str = "", style: str = "") -> str:
         """
-        render text by input color and style.
-        It's not recommend that input text is already rendered.
+        根据输入的颜色和样式渲染文本。
+        不建议输入已经渲染过的文本。
         """
-        # This method is called too frequently, which is not good.
+        # 这个方法被调用得太频繁了，这样不好。
         colors = self.get_all_colors()
-        # Perhaps color and font should be distinguished here.
+        # 这里或许应该区分颜色和字体样式。
         if color and color in colors:
-            error_message = f"color should be in: {colors} but now is: {color}"
+            error_message = f"颜色应该在: {colors} 中，但现在是: {color}"
             raise ValueError(error_message)
         if style and style in colors:
-            error_message = f"style should be in: {colors} but now is: {style}"
+            error_message = f"样式应该在: {colors} 中，但现在是: {style}"
             raise ValueError(error_message)
 
         text = f"{color}{text}{self.END}"
@@ -54,49 +55,53 @@ class LogColors:
     @staticmethod
     def remove_ansi_codes(s: str) -> str:
         """
-        It is for removing ansi ctrl characters in the string(e.g. colored text)
+        用于移除字符串中的 ANSI 控制字符（例如彩色文本）。
         """
         ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
         return ansi_escape.sub("", s)
 
 
 class CallerInfo(TypedDict):
+    """调用者信息类型字典。"""
     function: str
     line: int
     name: Optional[str]
 
 
 def get_caller_info(level: int = 2) -> CallerInfo:
-    # Get the current stack information
+    """获取调用者的信息。"""
+    # 获取当前的堆栈信息
     stack = inspect.stack()
-    # The second element is usually the caller's information
+    # 第二个元素通常是调用者的信息
     caller_info = stack[level]
     frame = caller_info[0]
     info: CallerInfo = {
         "line": caller_info.lineno,
-        "name": frame.f_globals["__name__"],  # Get the module name from the frame's globals
-        "function": frame.f_code.co_name,  # Get the caller's function name
+        "name": frame.f_globals["__name__"],  # 从帧的全局变量中获取模块名
+        "function": frame.f_code.co_name,  # 获取调用者的函数名
     }
     return info
 
 
 def is_valid_session(log_path: Path) -> bool:
+    """检查日志路径是否为有效的会话。"""
     return log_path.is_dir() and log_path.joinpath("__session__").exists()
 
 
 def extract_loopid_func_name(tag: str) -> tuple[str, str] | tuple[None, None]:
-    """extract loop id and function name from the tag in Message"""
+    """从消息的标签中提取循环 ID 和函数名。"""
     match = re.search(r"Loop_(\d+)\.([^.]+)", tag)
     return cast(tuple[str, str], match.groups()) if match else (None, None)
 
 
 def extract_evoid(tag: str) -> str | None:
-    """extract evo id from the tag in Message"""
+    """从消息的标签中提取进化 ID。"""
     match = re.search(r"\.evo_loop_(\d+)\.", tag)
     return cast(str, match.group(1)) if match else None
 
 
 def extract_json(log_content: str) -> dict | None:
+    """从日志内容中提取 JSON 对象。"""
     match = re.search(r"\{.*\}", log_content, re.DOTALL)
     if match:
         return cast(dict, json.loads(match.group(0)))
@@ -105,9 +110,9 @@ def extract_json(log_content: str) -> dict | None:
 
 def gen_datetime(dt: datetime | None = None) -> datetime:
     """
-    Generate a datetime object in UTC timezone.
-    - If `dt` is None, it will return the current time in UTC.
-    - If `dt` is provided, it will convert it to UTC timezone.
+    生成一个 UTC 时区的 datetime 对象。
+    - 如果 `dt` 为 None，将返回当前的 UTC 时间。
+    - 如果提供了 `dt`，将把它转换为 UTC 时区。
     """
     if dt is None:
         return datetime.now(timezone.utc)
@@ -116,14 +121,14 @@ def gen_datetime(dt: datetime | None = None) -> datetime:
 
 def dict_get_with_warning(d: dict, key: str, default: Any = None) -> Any:
     """
-    Motivation:
-    - When handling the repsonse from the LLM, we may use dict get to get the value.
-    - the function prevent falling into default value **silently**.
-    - Instead, it will log a warning message.
+    动机:
+    - 在处理来自 LLM 的响应时，我们可能会使用 dict.get 来获取值。
+    - 该函数防止 **静默地** 回退到默认值。
+    - 相反，它会记录一条警告消息。
     """
     from rdagent.log import rdagent_logger as logger
 
     if key not in d:
-        logger.warning(f"Key {key} not found in {d}")
+        logger.warning(f"在 {d} 中未找到键 {key}")
         return default
     return d[key]

@@ -34,18 +34,18 @@ from rdagent.oai.backend.base import APIBackend
 try:
     from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 except ImportError:
-    logger.warning("azure.identity is not installed.")
+    logger.warning("azure.identity 未安装。")
 
 try:
     import openai
 except ImportError:
-    logger.warning("openai is not installed.")
+    logger.warning("openai 未安装。")
 
 try:
     from llama import Llama
 except ImportError:
     if LLM_SETTINGS.use_llama2:
-        logger.warning("llama is not installed.")
+        logger.warning("llama 未安装。")
 
 try:
     from azure.ai.inference import ChatCompletionsClient
@@ -58,13 +58,13 @@ try:
     from azure.core.credentials import AzureKeyCredential
 except ImportError:
     if LLM_SETTINGS.chat_use_azure_deepseek:
-        logger.warning("azure.ai.inference or azure.core.credentials is not installed.")
+        logger.warning("azure.ai.inference 或 azure.core.credentials 未安装。")
 
 
 class ConvManager:
     """
-    This is a conversation manager of LLM
-    It is for convenience of exporting conversation for debugging.
+    这是 LLM 的对话管理器
+    它便于导出对话以进行调试。
     """
 
     def __init__(
@@ -77,6 +77,7 @@ class ConvManager:
         self.recent_n = recent_n
 
     def _rotate_files(self) -> None:
+        """轮换文件"""
         pairs = []
         for f in self.path.glob("*.json"):
             m = re.match(r"(\d+).json", f.name)
@@ -90,22 +91,23 @@ class ConvManager:
             f.rename(self.path / f"{n+1}.json")
 
     def append(self, conv: tuple[list, str]) -> None:
+        """追加对话"""
         self._rotate_files()
         with (self.path / "0.json").open("w") as file:
             json.dump(conv, file)
-        # TODO: reseve line breaks to make it more convient to edit file directly.
+        # TODO: 保留换行符，使其更便于直接编辑文件。
 
 
 class DeprecBackend(APIBackend):
     """
-    This is a unified interface for different backends.
+    这是不同后端的统一接口。
 
-    (xiao) thinks integrate all kinds of API in a single class is not a good design.
-    So we should split them into different classes in `oai/backends/` in the future.
+    (xiao) 认为将各种 API 集成到一个类中不是一个好的设计。
+    所以我们将来应该将它们拆分到 `oai/backends/` 中的不同类中。
     """
 
-    # FIXME: (xiao) We should avoid using self.xxxx.
-    # Instead, we can use LLM_SETTINGS directly. If it's difficult to support different backend settings, we can split them into multiple BaseSettings.
+    # FIXME: (xiao) 我们应该避免使用 self.xxxx。
+    # 相反，我们可以直接使用 LLM_SETTINGS。如果支持不同的后端设置很困难，我们可以将它们拆分为多个 BaseSettings。
     def __init__(  # noqa: C901, PLR0912, PLR0915
         self,
         *args: Any,
@@ -143,7 +145,7 @@ class DeprecBackend(APIBackend):
                 self.gcr_endpoint_deployment = LLM_SETTINGS.phi3_128k_endpoint_deployment
                 self.gcr_endpoint = LLM_SETTINGS.phi3_128k_endpoint
             else:
-                error_message = f"Invalid gcr_endpoint_type: {gcr_endpoint_type}"
+                error_message = f"无效的 gcr_endpoint_type: {gcr_endpoint_type}"
                 raise ValueError(error_message)
             self.headers = {
                 "Content-Type": "application/json",
@@ -174,8 +176,8 @@ class DeprecBackend(APIBackend):
             self.embedding_use_azure_token_provider = LLM_SETTINGS.embedding_use_azure_token_provider
             self.managed_identity_client_id = LLM_SETTINGS.managed_identity_client_id
 
-            # Priority: chat_api_key/embedding_api_key > openai_api_key > os.environ.get("OPENAI_API_KEY")
-            # TODO: Simplify the key design. Consider Pandatic's field alias & priority.
+            # 优先级: chat_api_key/embedding_api_key > openai_api_key > os.environ.get("OPENAI_API_KEY")
+            # TODO: 简化密钥设计。考虑 Pandatic 的字段别名和优先级。
             self.chat_api_key = (
                 LLM_SETTINGS.chat_openai_api_key or LLM_SETTINGS.openai_api_key or os.environ.get("OPENAI_API_KEY")
             )
@@ -230,23 +232,23 @@ class DeprecBackend(APIBackend):
                 else openai.OpenAI(api_key=self.embedding_api_key, base_url=self.embedding_openai_base_url)
             )
 
-        # transfer the config to the class if the config is not supposed to change during the runtime
+        # 如果配置在运行时不应更改，则将其传输到类
         self.use_llama2 = LLM_SETTINGS.use_llama2
         self.use_gcr_endpoint = LLM_SETTINGS.use_gcr_endpoint
         self.chat_use_azure_deepseek = LLM_SETTINGS.chat_use_azure_deepseek
 
     def _get_encoder(self) -> tiktoken.Encoding:
         """
-        tiktoken.encoding_for_model(self.chat_model) does not cover all cases it should consider.
+        tiktoken.encoding_for_model(self.chat_model) 并未涵盖所有应考虑的情况。
 
-        This function attempts to handle several edge cases.
+        此函数尝试处理几个边缘情况。
         """
 
-        # 1) cases
+        # 1) 案例
         def _azure_patch(model: str) -> str:
             """
-            When using Azure API, self.chat_model is the deployment name that can be any string.
-            For example, it may be `gpt-4o_2024-08-06`. But tiktoken.encoding_for_model can't handle this.
+            使用 Azure API 时，self.chat_model 是可以是任何字符串的部署名称。
+            例如，它可能是 `gpt-4o_2024-08-06`。但是 tiktoken.encoding_for_model 无法处理此问题。
             """
             return model.replace("_", "-")
 
@@ -254,23 +256,24 @@ class DeprecBackend(APIBackend):
         try:
             encoding = tiktoken.encoding_for_model(model)
         except KeyError:
-            logger.warning(f"Failed to get encoder. Trying to patch the model name")
+            logger.warning(f"获取编码器失败。正在尝试修补模型名称")
             for patch_func in [_azure_patch]:
                 try:
                     encoding = tiktoken.encoding_for_model(patch_func(model))
                 except KeyError:
-                    logger.error(f"Failed to get encoder even after patching with {patch_func.__name__}")
+                    logger.error(f"即使在使用 {patch_func.__name__} 修补后也无法获取编码器")
                     raise
         return encoding
 
     def supports_response_schema(self) -> bool:
         """
-        Check if the backend supports function calling.
-        Currently, deprec backend does not support function calling so it returns False. #FIXME: maybe a mapping to the backend class is needed.
+        检查后端是否支持函数调用。
+        目前，弃用的后端不支持函数调用，因此返回 False。 #FIXME: 可能需要一个到后端类的映射。
         """
         return False
 
     def _create_embedding_inner_function(self, input_content_list: list[str]) -> list[list[float]]:
+        """创建嵌入内部函数"""
         content_to_embedding_dict = {}
         for sliced_filtered_input_content_list in [
             input_content_list[i : i + LLM_SETTINGS.embedding_max_str_num]
@@ -301,15 +304,15 @@ class DeprecBackend(APIBackend):
     ) -> tuple[str, str | None]:
         """
         seed : Optional[int]
-            When retrying with cache enabled, it will keep returning the same results.
-            To make retries useful, we need to enable a seed.
-            This seed is different from `self.chat_seed` for GPT. It is for the local cache mechanism enabled by RD-Agent locally.
+            在启用缓存的情况下重试时，它将继续返回相同的结果。
+            为了使重试有用，我们需要启用一个种子。
+            此种子不同于 GPT 的 `self.chat_seed`。它用于 RD-Agent 本地启用的本地缓存机制。
         """
 
-        # TODO: we can add this function back to avoid so much `self.cfg.log_llm_chat_content`
+        # TODO: 我们可以将此函数加回来，以避免如此多的 `self.cfg.log_llm_chat_content`
         if LLM_SETTINGS.log_llm_chat_content:
             logger.info(self._build_log_messages(messages), tag="llm_messages")
-        # TODO: fail to use loguru adaptor due to stream response
+        # TODO: 由于流响应，无法使用 loguru 适配器
 
         model = LLM_SETTINGS.chat_model
         temperature = LLM_SETTINGS.chat_temperature
@@ -335,7 +338,7 @@ class DeprecBackend(APIBackend):
             )
             resp = response[0]["generation"]["content"]
             if LLM_SETTINGS.log_llm_chat_content:
-                logger.info(f"{LogColors.CYAN}Response:{resp}{LogColors.END}", tag="llm_messages")
+                logger.info(f"{LogColors.CYAN}响应:{resp}{LogColors.END}", tag="llm_messages")
         elif self.use_gcr_endpoint:
             body = str.encode(
                 json.dumps(
@@ -356,7 +359,7 @@ class DeprecBackend(APIBackend):
             response = urllib.request.urlopen(req)  # noqa: S310
             resp = json.loads(response.read().decode())["output"]
             if LLM_SETTINGS.log_llm_chat_content:
-                logger.info(f"{LogColors.CYAN}Response:{resp}{LogColors.END}", tag="llm_messages")
+                logger.info(f"{LogColors.CYAN}响应:{resp}{LogColors.END}", tag="llm_messages")
         elif self.chat_use_azure_deepseek:
             azure_style_message: list[ChatRequestMessage] = []
             for message in messages:
@@ -377,9 +380,9 @@ class DeprecBackend(APIBackend):
             )
             if self.chat_stream:
                 resp = ""
-                # TODO: with logger.config(stream=self.chat_stream): and add a `stream_start` flag to add timestamp for first message.
+                # TODO: 使用 logger.config(stream=self.chat_stream): 并添加一个 `stream_start` 标志为第一条消息添加时间戳。
                 if LLM_SETTINGS.log_llm_chat_content:
-                    logger.info(f"{LogColors.CYAN}Response:{LogColors.END}", tag="llm_messages")
+                    logger.info(f"{LogColors.CYAN}响应:{LogColors.END}", tag="llm_messages")
 
                 for chunk in response:
                     content = (
@@ -397,12 +400,12 @@ class DeprecBackend(APIBackend):
                 resp = response.choices[0].message.content
                 finish_reason = response.choices[0].finish_reason
                 if LLM_SETTINGS.log_llm_chat_content:
-                    logger.info(f"{LogColors.CYAN}Response:{resp}{LogColors.END}", tag="llm_messages")
+                    logger.info(f"{LogColors.CYAN}响应:{resp}{LogColors.END}", tag="llm_messages")
             match = re.search(r"<think>(.*?)</think>(.*)", resp, re.DOTALL)
             think_part, resp = match.groups() if match else ("", resp)
             if LLM_SETTINGS.log_llm_chat_content:
-                logger.info(f"{LogColors.CYAN}Think:{think_part}{LogColors.END}", tag="llm_messages")
-                logger.info(f"{LogColors.CYAN}Response:{resp}{LogColors.END}", tag="llm_messages")
+                logger.info(f"{LogColors.CYAN}思考:{think_part}{LogColors.END}", tag="llm_messages")
+                logger.info(f"{LogColors.CYAN}响应:{resp}{LogColors.END}", tag="llm_messages")
         else:
             call_kwargs: dict[str, Any] = dict(
                 model=model,
@@ -415,21 +418,21 @@ class DeprecBackend(APIBackend):
                 presence_penalty=presence_penalty,
             )
 
-            # FIX what if the model does not support response_schema
+            # 修复模型不支持 response_schema 的情况
             if response_format == {"type": "json_object"} and add_json_in_prompt:
                 for message in messages[::-1]:
-                    message["content"] = message["content"] + "\nPlease respond in json format."
+                    message["content"] = message["content"] + "\n请以 json 格式响应。"
                     if message["role"] == LLM_SETTINGS.system_prompt_role:
-                        # NOTE: assumption: systemprompt is always the first message
+                        # 注意：假设 systemprompt 始终是第一条消息
                         break
                 call_kwargs["response_format"] = {"type": "json_object"}
             response = self.chat_client.chat.completions.create(**call_kwargs)
 
             if self.chat_stream:
                 resp = ""
-                # TODO: with logger.config(stream=self.chat_stream): and add a `stream_start` flag to add timestamp for first message.
+                # TODO: 使用 logger.config(stream=self.chat_stream): 并添加一个 `stream_start` 标志为第一条消息添加时间戳。
                 if LLM_SETTINGS.log_llm_chat_content:
-                    logger.info(f"{LogColors.CYAN}Response:{LogColors.END}", tag="llm_messages")
+                    logger.info(f"{LogColors.CYAN}响应:{LogColors.END}", tag="llm_messages")
 
                 for chunk in response:
                     content = (
@@ -450,7 +453,7 @@ class DeprecBackend(APIBackend):
                 resp = response.choices[0].message.content
                 finish_reason = response.choices[0].finish_reason
                 if LLM_SETTINGS.log_llm_chat_content:
-                    logger.info(f"{LogColors.CYAN}Response:{resp}{LogColors.END}", tag="llm_messages")
+                    logger.info(f"{LogColors.CYAN}响应:{resp}{LogColors.END}", tag="llm_messages")
                     logger.info(
                         json.dumps(
                             {
@@ -465,20 +468,21 @@ class DeprecBackend(APIBackend):
         return resp, finish_reason
 
     def _calculate_token_from_messages(self, messages: list[dict[str, Any]]) -> int:
+        """从消息中计算令牌数"""
         if self.chat_use_azure_deepseek:
             return 0
         if self.encoder is None:
-            raise ValueError("Encoder is not initialized.")
+            raise ValueError("编码器未初始化。")
         if self.use_llama2 or self.use_gcr_endpoint:
-            logger.warning("num_tokens_from_messages() is not implemented for model llama2.")
-            return 0  # TODO implement this function for llama2
+            logger.warning("num_tokens_from_messages() 未为模型 llama2 实现。")
+            return 0  # TODO 为 llama2 实现此函数
 
         if "gpt4" in self.chat_model or "gpt-4" in self.chat_model:
             tokens_per_message = 3
             tokens_per_name = 1
         else:
-            tokens_per_message = 4  # every message follows <start>{role/name}\n{content}<end>\n
-            tokens_per_name = -1  # if there's a name, the role is omitted
+            tokens_per_message = 4  # 每条消息都遵循 <start>{role/name}\n{content}<end>\n
+            tokens_per_name = -1  # 如果有名称，则省略角色
         num_tokens = 0
         for message in messages:
             num_tokens += tokens_per_message
@@ -486,5 +490,5 @@ class DeprecBackend(APIBackend):
                 num_tokens += len(self.encoder.encode(value))
                 if key == "name":
                     num_tokens += tokens_per_name
-        num_tokens += 3  # every reply is primed with <start>assistant<message>
+        num_tokens += 3  # 每个回复都以 <start>assistant<message> 开头
         return num_tokens

@@ -7,13 +7,23 @@ import numpy as np
 from rdagent.core.utils import import_class
 from rdagent.oai.backend.base import APIBackend as BaseAPIBackend
 from rdagent.oai.llm_conf import LLM_SETTINGS
-from rdagent.utils import md5_hash  # for compatible with previous import
+from rdagent.utils import md5_hash  # 为了与之前的导入兼容
 
 
 def calculate_embedding_distance_between_str_list(
     source_str_list: list[str],
     target_str_list: list[str],
 ) -> list[list[float]]:
+    """
+    计算两个字符串列表之间的嵌入距离。
+
+    Args:
+        source_str_list (list[str]): 源字符串列表。
+        target_str_list (list[str]): 目标字符串列表。
+
+    Returns:
+        list[list[float]]: 嵌入距离矩阵。
+    """
     if not source_str_list or not target_str_list:
         return [[]]
 
@@ -32,13 +42,13 @@ def calculate_embedding_distance_between_str_list(
     return similarity_matrix.tolist()  # type: ignore[no-any-return]
 
 
-def get_api_backend(*args: Any, **kwargs: Any) -> BaseAPIBackend:  # TODO: import it from base.py
+def get_api_backend(*args: Any, **kwargs: Any) -> BaseAPIBackend:  # TODO: 从 base.py 导入
     """
-    get llm api backend based on settings dynamically.
+    根据设置动态获取 LLM API 后端。
     """
     api_backend_cls: Type[BaseAPIBackend] = import_class(LLM_SETTINGS.backend)
     return api_backend_cls(*args, **kwargs)
 
 
-# Alias
+# 别名
 APIBackend = get_api_backend

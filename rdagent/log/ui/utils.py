@@ -27,6 +27,7 @@ from rdagent.scenarios.data_science.proposal.exp_gen.select.submit import (
 )
 from rdagent.scenarios.kaggle.kaggle_crawler import get_metric_direction
 
+# 轻量级竞赛列表
 LITE = [
     "aerial-cactus-identification",
     "aptos2019-blindness-detection",
@@ -52,6 +53,7 @@ LITE = [
     "the-icml-2013-whale-challenge-right-whale-redux",
 ]
 
+# 高难度竞赛列表
 HIGH = [
     "3d-object-detection-for-autonomous-vehicles",
     "bms-molecular-translation",
@@ -70,6 +72,7 @@ HIGH = [
     "vinbigdata-chest-xray-abnormalities-detection",
 ]
 
+# 中等难度竞赛列表
 MEDIUM = [
     "AI4Code",
     "alaska2-image-steganalysis",
@@ -111,15 +114,17 @@ MEDIUM = [
     "whale-categorization-playground",
 ]
 
+# 所有竞赛列表
 ALL = HIGH + MEDIUM + LITE
 
 
 def get_script_time(stdout_p: Path):
+    """从 stdout 日志文件中获取脚本执行时间。"""
     with stdout_p.open("r") as f:
         first_line = next(f).strip()
         last_line = deque(f, maxlen=1).pop().strip()
 
-        # Extract timestamps from the lines
+        # 从行中提取时间戳
         first_time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\+\d{2}:\d{2})", first_line)
         last_time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\+\d{2}:\d{2})", last_line)
 
@@ -132,6 +137,7 @@ def get_script_time(stdout_p: Path):
 
 
 def _log_path_hash_func(log_path: Path) -> str:
+    """为日志路径生成哈希函数，用于缓存。"""
     hash_str = str(log_path) + str(log_path.stat().st_mtime)
     session_p = log_path / "__session__"
     if session_p.exists():
@@ -144,8 +150,9 @@ def _log_path_hash_func(log_path: Path) -> str:
 
 
 def map_stat(sota_mle_score: dict | None) -> str:
+    """将 SOTA MLE 分数映射为状态字符串。"""
     sota_exp_stat = None
-    if sota_mle_score:  # sota exp's grade output
+    if sota_mle_score:  # sota 实验的评分输出
         if sota_mle_score["gold_medal"]:
             sota_exp_stat = "gold"
         elif sota_mle_score["silver_medal"]:
@@ -162,6 +169,7 @@ def map_stat(sota_mle_score: dict | None) -> str:
 
 
 def get_best_report(log_path: Path) -> dict | None:
+    """获取最佳报告。"""
     log_storage = FileStorage(log_path)
     mle_reports = [extract_json(i.content) for i in log_storage.iter_msg(pattern="**/running/mle_score/*/*.pkl")]
     mle_reports = [report for report in mle_reports if report is not None and not pd.isna(report["score"])]
@@ -180,6 +188,7 @@ if UI_SETTING.enable_cache:
 
 
 def _get_sota_exp_stat_hash_func(log_path: Path, selector: Literal["auto", "best_valid"] = "auto") -> str:
+    """为 SOTA 实验状态获取函数生成哈希，用于缓存。"""
     return _log_path_hash_func(log_path) + selector
 
 
@@ -187,31 +196,31 @@ def get_sota_exp_stat(
     log_path: Path, selector: Literal["auto", "best_valid"] = "auto"
 ) -> tuple[DSExperiment | None, int | None, dict | None, str | None]:
     """
-    Get the SOTA experiment and its statistics from the log path.
+    从日志路径中获取 SOTA（State-of-the-Art）实验及其统计信息。
 
-    Parameters
+    参数
     ----------
     log_path : Path
-        Path to the experiment log directory.
-    selector : Literal["auto", "best_valid"], default "auto"
-        If "auto", returns sota_exp_to_submit; if "best_valid", returns sota selected by best valid score.
+        实验日志目录的路径。
+    selector : Literal["auto", "best_valid"], 默认为 "auto"
+        如果为 "auto"，返回 sota_exp_to_submit；如果为 "best_valid"，返回按最佳验证分数选择的 sota。
 
-    Returns
+    返回
     -------
     tuple[DSExperiment | None, int | None, dict | None, str | None]
-        A tuple containing:
-        - sota_exp : DSExperiment or None
-            The SOTA experiment object or None if not found.
-        - sota_loop_id : int or None
-            The loop ID of the SOTA experiment or None if not found.
-        - sota_mle_score : dict or None
-            The MLE score dictionary of the SOTA experiment or None if not found.
-        - sota_exp_stat : str or None
-            The medal status string ("gold", "silver", "bronze", etc.) or None if not found.
+        一个元组，包含：
+        - sota_exp : DSExperiment 或 None
+            SOTA 实验对象，如果未找到则为 None。
+        - sota_loop_id : int 或 None
+            SOTA 实验的循环 ID，如果未找到则为 None。
+        - sota_mle_score : dict 或 None
+            SOTA 实验的 MLE 分数字典，如果未找到则为 None。
+        - sota_exp_stat : str 或 None
+            奖牌状态字符串（"gold", "silver", "bronze" 等），如果未找到则为 None。
     """
     log_storage = FileStorage(log_path)
 
-    # get sota exp
+    # 获取 sota 实验
     sota_exp = None
     if selector == "auto":
         sota_exp_list = [i.content for i in log_storage.iter_msg(tag="sota_exp_to_submit")]
@@ -222,14 +231,14 @@ def get_sota_exp_stat(
             final_trace = trace_list[-1]
             final_trace.scen.metric_direction = get_metric_direction(
                 final_trace.scen.competition
-            )  # FIXME: remove this later.
+            )  # FIXME: 以后删除此行。
             bvs = BestValidSelector()
             sota_exp = bvs.get_sota_exp_to_submit(final_trace)
 
     if sota_exp is None:
         return None, None, None, None
 
-    # find sota exp's loop id
+    # 查找 sota 实验的循环 id
     sota_loop_id = None
     running_exps: list[tuple[DSExperiment, int]] = [
         (i.content, int(re.search(r".*Loop_(\d+).*", str(i.tag))[1]))
@@ -243,13 +252,13 @@ def get_sota_exp_stat(
             sota_loop_id = loop_id
             break
 
-    # get sota exp's mle score
+    # 获取 sota 实验的 mle 分数
     try:
         sota_mle_score = extract_json(
             [i.content for i in log_storage.iter_msg(tag=f"Loop_{sota_loop_id}.running.mle_score")][0]
         )
     except Exception as e:
-        # sota exp is not tested yet
+        # sota 实验尚未测试
         return sota_exp, sota_loop_id, None, None
 
     return sota_exp, sota_loop_id, sota_mle_score, map_stat(sota_mle_score)
@@ -260,32 +269,33 @@ if UI_SETTING.enable_cache:
 
 
 def _get_score_stat_hash_func(log_path: Path, sota_loop_id: int) -> str:
+    """为分数统计函数生成哈希，用于缓存。"""
     return _log_path_hash_func(log_path) + str(sota_loop_id)
 
 
 def get_score_stat(log_path: Path, sota_loop_id: int) -> tuple[float | None, float | None, bool | None, float | None]:
     """
-    Get the scores before and after merge period.
+    获取合并周期前后的分数。
 
-    Parameters
+    参数
     ----------
     log_path : Path
-        Path to the experiment log directory.
+        实验日志目录的路径。
     sota_loop_id : int
-        The loop ID of the SOTA experiment to check for merge status.
+        用于检查合并状态的 SOTA 实验的循环 ID。
 
-    Returns
+    返回
     -------
     tuple[float | None, float | None]
-        A tuple containing:
+        一个元组，包含：
         - valid_improve : bool
-            True if valid score is improved during merge period.
+            如果在合并期间验证分数有所改善，则为 True。
         - test_improve : bool
-            True if test score is improved during merge period.
+            如果在合并期间测试分数有所改善，则为 True。
         - submit_is_merge : bool
-            True if the sota loop is a merge loop.
+            如果 sota 循环是合并循环，则为 True。
         - merge_sota_rate : float | None
-            The merge sota rate.
+            合并 sota 的比率。
     """
     valid_before_merge = []
     test_before_merge = []
@@ -363,6 +373,7 @@ if UI_SETTING.enable_cache:
 
 
 def load_times_deprecated(log_path: Path):
+    """加载时间信息（已弃用）。"""
     try:
         session_path = log_path / "__session__"
         max_li = max(int(p.name) for p in session_path.iterdir() if p.is_dir() and p.name.isdigit())
@@ -381,15 +392,15 @@ if UI_SETTING.enable_cache:
 
 def load_times_info(log_path: Path) -> dict[int, dict[str, dict[Literal["start_time", "end_time"], datetime]]]:
     """
-    Load timing information for each loop and step.
+    加载每个循环和步骤的时间信息。
 
-    Returns
+    返回
     -------
     dict[int, dict[str, dict[Literal["start_time", "end_time"], datetime]]]
-        Dictionary with loop IDs as keys, where each value contains step names
-        mapping to their start and end times.
+        以循环 ID 为键的字典，其中每个值包含步骤名称
+        到其开始和结束时间的映射。
 
-        Example:
+        示例:
             {
                 1: {
                     "exp_gen": {
@@ -421,6 +432,7 @@ if UI_SETTING.enable_cache:
 
 
 def _log_folders_summary_hash_func(log_folder: str | Path, hours: int | None = None):
+    """为日志文件夹摘要生成哈希函数，用于缓存。"""
     summary_p = Path(log_folder) / (f"summary.pkl" if hours is None else f"summary_{hours}h.pkl")
     if summary_p.exists():
         hash_str = str(summary_p) + str(summary_p.stat().st_mtime)
@@ -430,23 +442,21 @@ def _log_folders_summary_hash_func(log_folder: str | Path, hours: int | None = N
 
 
 def get_summary_df(log_folder: str | Path, hours: int | None = None) -> tuple[dict, pd.DataFrame]:
-    """Process experiment logs and generate summary DataFrame.
+    """处理实验日志并生成摘要 DataFrame。
 
-    Several key metrics that need explanation:
+    几个需要解释的关键指标：
 
-    * Successful Final Decision: Percentage of experiment loops where code executed correctly
-      and produced expected output, as determined by evaluation feedback
+    * 成功的最终决策：代码正确执行并产生预期输出的实验循环百分比，
+      由评估反馈确定
 
-    * Best Result: The highest achievement level reached by any experiment throughout the entire
-      process, ranging from lowest to highest: made_submission, valid_submission, above_median,
+    * 最佳结果：在整个过程中任何实验达到的最高成就水平，
+      从最低到最高：made_submission, valid_submission, above_median,
       bronze, silver, gold
 
-    * SOTA Exp: Version found by working backward from the last attempt to find the most recent
-      successful experiment
+    * SOTA 实验：通过从最后一次尝试向后工作找到的最新成功实验的版本
 
-    * SOTA Exp (to_submit): Version selected by LLM from all successful experiments for
-      competition submission, considering not only scores but also generalization ability
-      and overfitting risk, totally decided by LLM
+    * SOTA 实验 (to_submit)：LLM 从所有成功实验中选择用于竞赛提交的版本，
+      不仅考虑分数，还考虑泛化能力和过拟合风险，完全由 LLM 决定
 
     """
     log_folder = Path(log_folder)
@@ -487,7 +497,7 @@ def get_summary_df(log_folder: str | Path, hours: int | None = None) -> tuple[di
         v["coding_time"] = str(coding_time).split(".")[0]
         v["running_time"] = str(running_time).split(".")[0]
 
-        # overwrite sota_exp_stat in summary.pkl because it may not be correct in multi-trace
+        # 覆盖 summary.pkl 中的 sota_exp_stat，因为它在多轨迹中可能不正确
         sota_exp_submit, v["sota_loop_id_new"], sota_submit_report, v["sota_exp_stat_new"] = get_sota_exp_stat(
             log_folder / k, selector="auto"
         )
@@ -504,7 +514,7 @@ def get_summary_df(log_folder: str | Path, hours: int | None = None) -> tuple[di
         if sota_exp_submit is not None:
             try:
                 sota_submit_result = sota_exp_submit.result
-            except AttributeError:  # Compatible with old versions
+            except AttributeError:  # 兼容旧版本
                 sota_submit_result = sota_exp_submit.__dict__["result"]
             v["sota_exp_score_valid_new"] = (
                 sota_submit_result.loc["ensemble"].iloc[0] if sota_submit_result is not None else None
@@ -552,7 +562,7 @@ def get_summary_df(log_folder: str | Path, hours: int | None = None) -> tuple[di
         index=summary.keys(),
     )
 
-    # Read baseline results
+    # 读取基线结果
     baseline_result_path = UI_SETTING.baseline_result_path
     if Path(baseline_result_path).exists():
         baseline_df = pd.read_csv(baseline_result_path)
@@ -667,11 +677,11 @@ if UI_SETTING.enable_cache:
 
 def percent_df(summary_df: pd.DataFrame, show_origin=True) -> pd.DataFrame:
     """
-    Convert the summary DataFrame to a percentage format.
+    将摘要 DataFrame 转换为百分比格式。
     """
     new_df = summary_df.copy(deep=True)
 
-    # Convert columns to object dtype so we can store strings like "14 (53.85%)" without warnings
+    # 将列转换为对象数据类型，以便我们可以存储像 "14 (53.85%)" 这样的字符串而不会出现警告
     columns_to_convert = [
         "Successful Final Decision",
         "Made Submission",
@@ -683,7 +693,7 @@ def percent_df(summary_df: pd.DataFrame, show_origin=True) -> pd.DataFrame:
         "Any Medal",
     ]
 
-    # Filter columns_to_convert to only include columns that exist in new_df
+    # 过滤 columns_to_convert 以仅包括 new_df 中存在的列
     existing_columns = [col for col in columns_to_convert if col in new_df.columns]
     new_df[existing_columns] = new_df[existing_columns].astype(object)
 
@@ -710,6 +720,7 @@ def percent_df(summary_df: pd.DataFrame, show_origin=True) -> pd.DataFrame:
 
 
 def get_statistics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
+    """获取统计 DataFrame。"""
     if summary_df["Any Medal"].dtype == int:
         check_value = 0
     else:
@@ -782,11 +793,11 @@ def get_statistics_df(summary_df: pd.DataFrame) -> pd.DataFrame:
 
 def curve_figure(scores: pd.DataFrame) -> go.Figure:
     """
-    scores.columns.name is the metric name, e.g., "accuracy", "f1", etc.
-    scores.index is the loop index, e.g., ["L1", "L2", "L3", ...]
-    scores["test"] is the test score, other columns are valid scores for different loops.
-    The "ensemble" column is the ensemble score.
-    The "Test scores" and "ensemble" lines are visible, while other valid scores are hidden by default.
+    scores.columns.name 是指标名称，例如 "accuracy", "f1" 等。
+    scores.index 是循环索引，例如 ["L1", "L2", "L3", ...]
+    scores["test"] 是测试分数，其他列是不同循环的验证分数。
+    "ensemble" 列是集成得分。
+    "Test scores" 和 "ensemble" 线是可见的，而其他验证分数默认隐藏。
     """
     fig = go.Figure()
     fig.add_trace(
@@ -816,6 +827,7 @@ def curve_figure(scores: pd.DataFrame) -> go.Figure:
 
 
 def lite_curve_figure(summary):
+    """创建精简曲线图。"""
     cols = 3  # 每行几个图，可调整
     rows = math.ceil(len(summary) / cols)
 
@@ -882,23 +894,24 @@ def lite_curve_figure(summary):
 
 
 def trace_figure(trace: Trace, merge_loops: list = []):
+    """创建轨迹图。"""
     G = nx.DiGraph()
 
-    # Calculate the number of ancestors for each node (root node is 0, more ancestors means lower level)
+    # 计算每个节点的祖先数量（根节点为 0，祖先越多，层级越低）
     levels = {}
     for i in range(len(trace.dag_parent)):
         levels[i] = len(trace.get_parents(i))
 
     def get_display_name(idx: int):
         """
-        Convert to index in the queue (enque id) to loop_idx for easier understanding.
+        将队列中的索引（enque id）转换为 loop_idx，以便于理解。
         """
         if hasattr(trace, "idx2loop_id") and idx in trace.idx2loop_id:
-            # FIXME: only keep me after it is stable. Just for compatibility.
+            # FIXME: 稳定后只保留此部分。仅为兼容性。
             return f"L{trace.idx2loop_id[idx]} ({idx})"
         return f"L{idx}"
 
-    # Add nodes and edges
+    # 添加节点和边
     edges = []
     parents_record = {}
     for i, parents in enumerate(trace.dag_parent):
@@ -909,10 +922,10 @@ def trace_figure(trace: Trace, merge_loops: list = []):
         parents_record[get_display_name(i)] = [get_display_name(parent) for parent in parents]
     G.add_edges_from(edges)
 
-    # Check if G is a path (a single line)
+    # 检查 G 是否为路径（一条直线）
     is_path = nx.is_path(G, list(nx.topological_sort(G)))
     if is_path:
-        # Arrange nodes in a square spiral
+        # 将节点排列成方形螺旋
         n = len(G.nodes())
         pos = {}
         x, y = 0, 0
@@ -928,18 +941,18 @@ def trace_figure(trace: Trace, merge_loops: list = []):
             steps_taken += 1
             if steps_taken == steps_in_dir:
                 steps_taken = 0
-                # Change direction: right -> up -> left -> down -> right ...
+                # 改变方向：右 -> 上 -> 左 -> 下 -> 右 ...
                 dx, dy = -dy, dx
                 dir_changes += 1
                 if dir_changes % 2 == 0:
                     steps_in_dir += 1
     else:
-        # Group nodes by number of ancestors, fewer ancestors are higher up
+        # 按祖先数量对节点进行分组，祖先越少，位置越高
         layer_nodes = {}
         for idx, lvl in levels.items():
             layer_nodes.setdefault(lvl, []).append(get_display_name(idx))
 
-        # Layout by level: y axis is -lvl, x axis is evenly distributed
+        # 按层级布局：y 轴为 -lvl，x 轴均匀分布
         pos = {}
 
         def parent_avg_pos(node):
@@ -949,20 +962,20 @@ def trace_figure(trace: Trace, merge_loops: list = []):
 
         for lvl in sorted(layer_nodes):
             nodes = layer_nodes[lvl]
-            # For root nodes, sort directly by index
+            # 对于根节点，直接按索引排序
             if lvl == min(layer_nodes):
                 sorted_nodes = sorted(nodes, key=lambda n: int(n[1:].split(" ")[0]))
             else:
-                # Sort by average parent x, so children are below their parents
+                # 按平均父节点 x 排序，使子节点位于其父节点下方
                 sorted_nodes = sorted(nodes, key=parent_avg_pos)
-            y = -lvl  # y decreases as level increases (children below parents)
+            y = -lvl  # y 随层级增加而减小（子节点在父节点下方）
             for i, node in enumerate(sorted_nodes):
                 if lvl == min(layer_nodes):
                     x = i
                 else:
-                    # Place child directly below average parent x, offset if multiple at same y
+                    # 将子节点直接置于平均父节点 x 下方，如果在同一 y 轴上有多个节点，则偏移
                     avg_x = parent_avg_pos(node)
-                    # To avoid overlap, spread siblings a bit if needed
+                    # 为避免重叠，如果需要，稍微分散同级节点
                     x = avg_x + (i - (len(sorted_nodes) - 1) / 2) * 0.5
                 pos[node] = (x, y)
 
@@ -973,11 +986,12 @@ def trace_figure(trace: Trace, merge_loops: list = []):
 
 
 def timeline_figure(times_dict: dict[int, dict[str, dict[Literal["start_time", "end_time"], datetime]]]) -> go.Figure:
-    # Prepare data for px.timeline
+    """创建时间线图。"""
+    # 准备 px.timeline 的数据
     timeline_data = []
     step_names = ["exp_gen", "coding", "running", "feedback", "record"]
 
-    # Beautiful color palette with gradients
+    # 带有渐变的漂亮调色板
     colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA726", "#5A0069"]
     color_map = {step: color for step, color in zip(step_names, colors)}
 
@@ -991,16 +1005,16 @@ def timeline_figure(times_dict: dict[int, dict[str, dict[Literal["start_time", "
                         "Finish": timing["end_time"],
                         "Step": step_name,
                         "Loop_ID": f"Loop {loop_id}",
-                        "Duration": str(duration).split(".")[0],  # Remove microseconds
+                        "Duration": str(duration).split(".")[0],  # 移除微秒
                     }
                 )
 
-    # Create DataFrame and sort by loop ID in descending order
+    # 创建 DataFrame 并按循环 ID 降序排序
     df = pd.DataFrame(timeline_data)
     df["loop_sort"] = df["Loop_ID"].str.extract("(\d+)").astype(int)
     df = df.sort_values("loop_sort", ascending=False)
 
-    # Create timeline with enhanced styling
+    # 创建具有增强样式的时间线
     fig = px.timeline(
         df,
         x_start="Start",
@@ -1013,10 +1027,10 @@ def timeline_figure(times_dict: dict[int, dict[str, dict[Literal["start_time", "
         hover_name="Step",
     )
 
-    # Enhanced styling and layout
+    # 增强样式和布局
     fig.update_traces(
         marker=dict(line=dict(width=1, color="rgba(255,255,255,0.8)"), opacity=0.85),
-        width=0.9,  # Increased from 0.8 to make bars thicker and reduce spacing
+        width=0.9,  # 从 0.8 增加到 0.9，使条形更粗，减少间距
         hovertemplate="<b>%{hovertext}</b><br>"
         + "Start: %{base}<br>"
         + "End: %{x}<br>"
@@ -1024,7 +1038,7 @@ def timeline_figure(times_dict: dict[int, dict[str, dict[Literal["start_time", "
         + "<extra></extra>",
     )
 
-    # Beautiful layout with gradients and shadows
+    # 带有渐变和阴影的漂亮布局
     fig.update_layout(
         title=dict(text="Data Science Loop Timeline", x=0.0, font=dict(size=24, color="#2C3E50", family="Arial Black")),
         xaxis=dict(
@@ -1047,7 +1061,7 @@ def timeline_figure(times_dict: dict[int, dict[str, dict[Literal["start_time", "
         ),
         plot_bgcolor="rgba(248, 249, 250, 0.8)",
         paper_bgcolor="white",
-        height=max(200, len(times_dict) * 25),  # Reduced from 300 and 30 to 200 and 25
+        height=max(200, len(times_dict) * 25),  # 从 300 和 30 减少到 200 和 25
         margin=dict(l=100, r=60, t=80, b=60),
         legend=dict(
             x=0.98,
@@ -1065,12 +1079,12 @@ def timeline_figure(times_dict: dict[int, dict[str, dict[Literal["start_time", "
         template="plotly_white",
     )
 
-    # Reorder legend to match step_names order
+    # 重新排序图例以匹配 step_names 的顺序
     fig.data = sorted(
         fig.data, key=lambda trace: step_names.index(trace.name) if trace.name in step_names else len(step_names)
     )
 
-    # Add subtle shadow effect
+    # 添加微妙的阴影效果
     fig.add_shape(
         type="rect",
         xref="paper",
@@ -1093,7 +1107,7 @@ def compare(
     select_best: bool = typer.Option(False, help="Select best experiment for each competition."),
 ):
     """
-    Generate summary and base dataframe for given experiment list, and save to a summary file.
+    为给定的实验列表生成摘要和基础数据帧，并保存到摘要文件中。
     """
     typer.secho(f"exp_list: {exp_list}", fg=typer.colors.GREEN)
     log_folders = [f"{UI_SETTING.amlt_path}/{exp}/combined_logs" for exp in exp_list]
@@ -1103,7 +1117,7 @@ def compare(
         def apply_func(cdf: pd.DataFrame):
             cp = cdf["Competition"].values[0]
             md = get_metric_direction(cp)
-            # If SOTA Exp Score (valid, to_submit) column is empty, return the first index
+            # 如果 SOTA Exp Score (valid, to_submit) 列为空，则返回第一个索引
             if cdf["SOTA Exp Score (valid, to_submit)"].dropna().empty:
                 return cdf.index[0]
             if md:

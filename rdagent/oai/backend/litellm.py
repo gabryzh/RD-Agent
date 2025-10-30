@@ -20,14 +20,14 @@ from rdagent.oai.backend.base import APIBackend
 from rdagent.oai.llm_conf import LLMSettings
 
 
-# NOTE: Patching! Otherwise, the exception will call the constructor and with following error:
-# `BadRequestError.__init__() missing 2 required positional arguments: 'model' and 'llm_provider'`
+# 注意：修补！否则，异常将调用构造函数并出现以下错误：
+# `BadRequestError.__init__() 缺少 2 个必需的位置参数：'model' 和 'llm_provider'`
 def _reduce_no_init(exc: Exception) -> tuple:
     cls = exc.__class__
     return (cls.__new__, (cls,), exc.__dict__)
 
 
-# suppose you want to apply this to MyError
+# 假设你想将此应用于 MyError
 copyreg.pickle(BadRequestError, _reduce_no_init)
 
 
@@ -35,9 +35,9 @@ class LiteLLMSettings(LLMSettings):
 
     class Config:
         env_prefix = "LITELLM_"
-        """Use `LITELLM_` as prefix for environment variables"""
+        """使用 `LITELLM_` 作为环境变量的前缀"""
 
-    # Placeholder for LiteLLM specific settings, so far it's empty
+    # LiteLLM 特定设置的占位符，目前为空
 
 
 LITELLM_SETTINGS = LiteLLMSettings()
@@ -45,7 +45,7 @@ ACC_COST = 0.0
 
 
 class LiteLLMAPIBackend(APIBackend):
-    """LiteLLM implementation of APIBackend interface"""
+    """APIBackend 接口的 LiteLLM 实现"""
 
     _has_logged_settings: bool = False
 
@@ -58,24 +58,24 @@ class LiteLLMAPIBackend(APIBackend):
 
     def _calculate_token_from_messages(self, messages: list[dict[str, Any]]) -> int:
         """
-        Calculate the token count from messages
+        从消息中计算令牌数
         """
         num_tokens = token_counter(
             model=LITELLM_SETTINGS.chat_model,
             messages=messages,
         )
-        logger.info(f"{LogColors.CYAN}Token count: {LogColors.END} {num_tokens}", tag="debug_litellm_token")
+        logger.info(f"{LogColors.CYAN}令牌计数: {LogColors.END} {num_tokens}", tag="debug_litellm_token")
         return num_tokens
 
     def _create_embedding_inner_function(self, input_content_list: list[str]) -> list[list[float]]:
         """
-        Call the embedding function
+        调用嵌入函数
         """
         model_name = LITELLM_SETTINGS.embedding_model
-        logger.info(f"{LogColors.GREEN}Using emb model{LogColors.END} {model_name}", tag="debug_litellm_emb")
+        logger.info(f"{LogColors.GREEN}使用 emb 模型{LogColors.END} {model_name}", tag="debug_litellm_emb")
         if LITELLM_SETTINGS.log_llm_chat_content:
             logger.info(
-                f"{LogColors.MAGENTA}Creating embedding{LogColors.END} for: {input_content_list}",
+                f"{LogColors.MAGENTA}正在为以下内容创建嵌入{LogColors.END}: {input_content_list}",
                 tag="debug_litellm_emb",
             )
         response = embedding(
@@ -93,10 +93,10 @@ class LiteLLMAPIBackend(APIBackend):
 
     def get_complete_kwargs(self) -> CompleteKwargs:
         """
-        return several key settings for completion
-        getting these values from settings makes it easier to adapt to backend calls in agent systems.
+        返回完成的几个关键设置
+        从设置中获取这些值使得在代理系统中适应后端调用更加容易。
         """
-        # Call LiteLLM completion
+        # 调用 LiteLLM 完成
         model = LITELLM_SETTINGS.chat_model
         temperature = LITELLM_SETTINGS.chat_temperature
         max_tokens = LITELLM_SETTINGS.chat_max_tokens
@@ -131,13 +131,13 @@ class LiteLLMAPIBackend(APIBackend):
         **kwargs,
     ) -> tuple[str, str | None]:
         """
-        Call the chat completion function
+        调用聊天完成函数
         """
 
         if response_format and not supports_response_schema(model=LITELLM_SETTINGS.chat_model):
-            # Deepseek will enter this branch
+            # Deepseek 将进入此分支
             logger.warning(
-                f"{LogColors.YELLOW}Model {LITELLM_SETTINGS.chat_model} does not support response schema, ignoring response_format argument.{LogColors.END}",
+                f"{LogColors.YELLOW}模型 {LITELLM_SETTINGS.chat_model} 不支持响应模式，将忽略 response_format 参数。{LogColors.END}",
                 tag="llm_messages",
             )
             response_format = None
@@ -159,11 +159,11 @@ class LiteLLMAPIBackend(APIBackend):
             **kwargs,
         )
         if LITELLM_SETTINGS.log_llm_chat_content:
-            logger.info(f"{LogColors.GREEN}Using chat model{LogColors.END} {model}", tag="llm_messages")
+            logger.info(f"{LogColors.GREEN}使用聊天模型{LogColors.END} {model}", tag="llm_messages")
 
         if LITELLM_SETTINGS.chat_stream:
             if LITELLM_SETTINGS.log_llm_chat_content:
-                logger.info(f"{LogColors.BLUE}assistant:{LogColors.END}", tag="llm_messages")
+                logger.info(f"{LogColors.BLUE}助手:{LogColors.END}", tag="llm_messages")
             content = ""
             finish_reason = None
             for message in response:
@@ -172,7 +172,7 @@ class LiteLLMAPIBackend(APIBackend):
                 if "content" in message["choices"][0]["delta"]:
                     chunk = (
                         message["choices"][0]["delta"]["content"] or ""
-                    )  # when finish_reason is "stop", content is None
+                    )  # 当 finish_reason 为 "stop" 时，内容为 None
                     content += chunk
                     if LITELLM_SETTINGS.log_llm_chat_content:
                         logger.info(LogColors.CYAN + chunk + LogColors.END, raw=True, tag="llm_messages")
@@ -182,26 +182,26 @@ class LiteLLMAPIBackend(APIBackend):
             content = str(response.choices[0].message.content)
             finish_reason = response.choices[0].finish_reason
             finish_reason_str = (
-                f"({LogColors.RED}Finish reason: {finish_reason}{LogColors.END})"
+                f"({LogColors.RED}完成原因: {finish_reason}{LogColors.END})"
                 if finish_reason and finish_reason != "stop"
                 else ""
             )
             if LITELLM_SETTINGS.log_llm_chat_content:
                 logger.info(
-                    f"{LogColors.BLUE}assistant:{LogColors.END} {finish_reason_str}\n{content}", tag="llm_messages"
+                    f"{LogColors.BLUE}助手:{LogColors.END} {finish_reason_str}\n{content}", tag="llm_messages"
                 )
 
         global ACC_COST
         try:
             cost = completion_cost(model=model, messages=messages, completion=content)
         except Exception as e:
-            logger.warning(f"Cost calculation failed for model {model}: {e}. Skip cost statistics.")
+            logger.warning(f"模型 {model} 的成本计算失败: {e}。跳过成本统计。")
             cost = np.nan
         else:
             ACC_COST += cost
             if LITELLM_SETTINGS.log_llm_chat_content:
                 logger.info(
-                    f"Current Cost: ${float(cost):.10f}; Accumulated Cost: ${float(ACC_COST):.10f}; {finish_reason=}",
+                    f"当前成本: ${float(cost):.10f}; 累计成本: ${float(ACC_COST):.10f}; {finish_reason=}",
                 )
 
         prompt_tokens = token_counter(model=model, messages=messages)
@@ -220,13 +220,13 @@ class LiteLLMAPIBackend(APIBackend):
 
     def supports_response_schema(self) -> bool:
         """
-        Check if the backend supports function calling
+        检查后端是否支持函数调用
         """
         return supports_response_schema(model=LITELLM_SETTINGS.chat_model) and LITELLM_SETTINGS.enable_response_schema
 
     @property
     def chat_token_limit(self) -> int:
-        """Suggest an input token limit, ensuring enough space in the context window for the maximum output tokens."""
+        """建议输入令牌限制，确保上下文窗口中有足够的空间用于最大输出令牌。"""
         try:
             model_info = get_model_info(LITELLM_SETTINGS.chat_model)
             if model_info is None:
