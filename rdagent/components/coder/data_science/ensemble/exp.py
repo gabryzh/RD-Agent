@@ -8,6 +8,11 @@ from rdagent.components.coder.CoSTEER.task import CoSTEERTask
 from rdagent.core.utils import cache_with_pickle
 
 
-# Because we use isinstance to distinguish between different types of tasks, we need to use sub classes to represent different types of tasks
+# 因为我们使用 isinstance 来区分不同类型的任务，
+# 所以我们需要使用子类来表示不同类型的任务。
 class EnsembleTask(CoSTEERTask):
+    """
+    表示模型集成（Ensemble）的任务。
+    继承自 CoSTEERTask，专门用于标识这是一个模型集成的任务。
+    """
     pass

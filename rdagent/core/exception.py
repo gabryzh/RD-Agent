@@ -1,66 +1,66 @@
 class WorkflowError(Exception):
     """
-    Exception indicating an error that the current loop cannot handle, preventing further progress.
+    工作流错误，表示当前循环无法处理的错误，阻止了进一步的进展。
     """
 
 
 class FormatError(WorkflowError):
     """
-    After multiple attempts, we are unable to obtain the answer in the correct format to proceed.
+    格式错误，在多次尝试后，我们无法以正确的格式获取答案以继续。
     """
 
 
 class CoderError(WorkflowError):
     """
-    Exceptions raised when Implementing and running code.
-    - start: FactorTask => FactorGenerator
-    - end: Get dataframe after execution
+    编码器错误，在实现和运行代码时引发的异常。
+    - 开始: 因子任务 => 因子生成器
+    - 结束: 执行后获取数据帧
 
-    The more detailed evaluation in dataframe values are managed by the evaluator.
+    数据帧值中更详细的评估由评估器管理。
     """
 
-    # NOTE: it corresponds to the error of **component**
-    caused_by_timeout: bool = False  # whether the error is caused by timeout
+    # 注意：它对应于**组件**的错误
+    caused_by_timeout: bool = False  # 错误是否由超时引起
 
 
 class CodeFormatError(CoderError):
     """
-    The generated code is not found due format error.
+    代码格式错误，由于格式错误，未找到生成的代码。
     """
 
 
 class CustomRuntimeError(CoderError):
     """
-    The generated code fail to execute the script.
+    自定义运行时错误，生成的代码未能执行脚本。
     """
 
 
 class NoOutputError(CoderError):
     """
-    The code fail to generate output file.
+    无输出错误，代码未能生成输出文件。
     """
 
 
 class RunnerError(Exception):
     """
-    Exceptions raised when running the code output.
+    运行器错误，在运行代码输出时引发的异常。
     """
 
-    # NOTE: it corresponds to the error of whole **project**
+    # 注意：它对应于整个**项目**的错误
 
 
-FactorEmptyError = CoderError  # Exceptions raised when no factor is generated correctly
+FactorEmptyError = CoderError  # 未正确生成因子时引发的异常
 
-ModelEmptyError = CoderError  # Exceptions raised when no model is generated correctly
+ModelEmptyError = CoderError  # 未正确生成模型时引发的异常
 
 
 class KaggleError(Exception):
     """
-    Exceptions raised when calling Kaggle API
+    Kaggle错误，在调用Kaggle API时引发的异常。
     """
 
 
 class PolicyError(Exception):
     """
-    Exceptions raised due to content management policy
+    策略错误，由于内容管理策略而引发的异常。
     """

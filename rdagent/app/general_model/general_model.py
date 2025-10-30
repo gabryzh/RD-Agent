@@ -13,32 +13,32 @@ from rdagent.scenarios.qlib.developer.model_coder import QlibModelCoSTEER
 
 def extract_models_and_implement(report_file_path: str) -> None:
     """
-    This is a research copilot to automatically implement models from a report file or paper.
+    这是一个研究助手，用于从报告文件或论文中自动实现模型。
 
-    It extracts models from a given PDF report file and implements the necessary operations.
+    它从给定的PDF报告文件中提取模型，并实现必要的操作。
 
-    Parameters:
-    report_file_path (str): The path to the report file. The file must be a PDF file.
+    参数：
+    report_file_path (str): 报告文件的路径。该文件必须是PDF文件。
 
-    Example URLs of PDF reports:
+    PDF报告的示例URL：
     - https://arxiv.org/pdf/2210.09789
     - https://arxiv.org/pdf/2305.10498
     - https://arxiv.org/pdf/2110.14446
     - https://arxiv.org/pdf/2205.12454
     - https://arxiv.org/pdf/2210.16518
 
-    Returns:
+    返回：
     None
     """
     scenario = GeneralModelScenario()
-    logger.log_object(scenario, tag="scenario")
-    # Save Relevant Images
+    logger.log_object(scenario, tag="场景")
+    # 保存相关图片
     img = extract_first_page_screenshot_from_pdf(report_file_path)
     logger.log_object(img, tag="pdf_image")
     exp = ModelExperimentLoaderFromPDFfiles().load(report_file_path)
-    logger.log_object(exp, tag="load_experiment")
+    logger.log_object(exp, tag="加载实验")
     exp = QlibModelCoSTEER(scenario).develop(exp)
-    logger.log_object(exp, tag="developed_experiment")
+    logger.log_object(exp, tag="开发后的实验")
 
 
 if __name__ == "__main__":

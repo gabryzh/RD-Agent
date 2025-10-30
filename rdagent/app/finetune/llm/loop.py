@@ -15,22 +15,21 @@ def main(
     dataset: str | None = None,
 ):
     """
-    Parameters
-    ----------
-    dataset :
-        Dateset name, used for finetune.
+    用于模型微调的自动研发演进循环。
 
-    Auto R&D Evolving loop for models finetune.
-    You can continue running a session by using the command:
+    参数：
+        dataset (str): 用于微调的数据集名称。
+
+    您可以使用以下命令继续运行一个会话：
     .. code-block:: bash
         dotenv run -- python rdagent/app/finetune/llm/loop.py --dataset shibing624/alpaca-zh
     """
     if not dataset:
-        raise Exception("Please specify dataset name.")
+        raise Exception("请指定数据集名称。")
 
     model_folder = Path(DS_RD_SETTING.local_data_path) / dataset / "prev_model"
     if not model_folder.exists():
-        raise Exception(f"Please put the model path to {model_folder}.")
+        raise Exception(f"请将模型路径放置在 {model_folder}。")
     update_settings(dataset)
     rd_loop: DataScienceRDLoop = DataScienceRDLoop(DS_RD_SETTING)
     asyncio.run(rd_loop.run())

@@ -14,6 +14,7 @@ from rdagent.utils.env import cleanup_container
 
 
 def check_docker_status() -> None:
+    """检查Docker状态。"""
     container = None
     try:
         client = docker.from_env()
@@ -21,22 +22,24 @@ def check_docker_status() -> None:
         container = client.containers.run("hello-world", detach=True)
         logs = container.logs().decode("utf-8")
         print(logs)
-        logger.info(f"The docker status is normal")
+        logger.info("Docker状态正常。")
     except docker.errors.DockerException as e:
-        logger.error(f"An error occurred: {e}")
+        logger.error(f"发生错误: {e}")
         logger.warning(
-            f"Docker status is exception, please check the docker configuration or reinstall it. Refs: https://docs.docker.com/engine/install/ubuntu/."
+            "Docker状态异常，请检查Docker配置或重新安装。参考: https://docs.docker.com/engine/install/ubuntu/."
         )
     finally:
-        cleanup_container(container, "health check")
+        cleanup_container(container, "健康检查")
 
 
 def is_port_in_use(port):
+    """检查端口是否被占用。"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def check_and_list_free_ports(start_port=19899, max_ports=10) -> None:
+    """检查并列出空闲端口。"""
     is_occupied = is_port_in_use(port=start_port)
     if is_occupied:
         free_ports = []
@@ -44,21 +47,22 @@ def check_and_list_free_ports(start_port=19899, max_ports=10) -> None:
             if not is_port_in_use(port):
                 free_ports.append(port)
         logger.warning(
-            f"Port 19899 is occupied, please replace it with an available port when running the `rdagent ui` command. Available ports: {free_ports}"
+            f"端口 19899 被占用，请在运行 `rdagent ui` 命令时替换为可用端口。可用端口: {free_ports}"
         )
     else:
-        logger.info(f"Port 19899 is not occupied, you can run the `rdagent ui` command")
+        logger.info("端口 19899 未被占用，您可以运行 `rdagent ui` 命令。")
 
 
 def test_chat(chat_model, chat_api_key, chat_api_base):
-    logger.info(f"🧪 Testing chat model: {chat_model}")
+    """测试聊天模型。"""
+    logger.info(f"🧪 测试聊天模型: {chat_model}")
     try:
         if chat_api_base is None:
             response: ModelResponse = completion(
                 model=chat_model,
                 api_key=chat_api_key,
                 messages=[
-                    {"role": "user", "content": "Hello!"},
+                    {"role": "user", "content": "你好!"},
                 ],
             )
         else:
@@ -67,39 +71,42 @@ def test_chat(chat_model, chat_api_key, chat_api_base):
                 api_key=chat_api_key,
                 api_base=chat_api_base,
                 messages=[
-                    {"role": "user", "content": "Hello!"},
+                    {"role": "user", "content": "你好!"},
                 ],
             )
-        logger.info(f"✅ Chat test passed.")
+        logger.info("✅ 聊天测试通过。")
         return True
     except Exception as e:
-        logger.error(f"❌ Chat test failed: {e}")
+        logger.error(f"❌ 聊天测试失败: {e}")
         return False
 
 
 def test_embedding(embedding_model, embedding_api_key, embedding_api_base):
-    logger.info(f"🧪 Testing embedding model: {embedding_model}")
+    """测试嵌入模型。"""
+    logger.info(f"🧪 测试嵌入模型: {embedding_model}")
     try:
         response = embedding(
             model=embedding_model,
             api_key=embedding_api_key,
             api_base=embedding_api_base,
-            input="Hello world!",
+            input="你好，世界!",
         )
-        logger.info("✅ Embedding test passed.")
+        logger.info("✅ 嵌入测试通过。")
         return True
     except Exception as e:
-        logger.error(f"❌ Embedding test failed: {e}")
+        logger.error(f"❌ 嵌入测试失败: {e}")
         return False
 
 
 def env_check():
+    """检查环境变量和API配置。"""
     if "BACKEND" not in os.environ:
         logger.warning(
-            f"We did not find BACKEND in your configuration, please add it to your .env file. "
-            f"You can run a command like this: `dotenv set BACKEND rdagent.oai.backend.LiteLLMAPIBackend`"
+            "在您的配置中未找到BACKEND，请将其添加到您的.env文件中。"
+            "您可以运行类似 `dotenv set BACKEND rdagent.oai.backend.LiteLLMAPIBackend` 的命令。"
         )
 
+    chat_api_key = None
     if "DEEPSEEK_API_KEY" in os.environ:
         chat_api_key = os.getenv("DEEPSEEK_API_KEY")
         chat_model = os.getenv("CHAT_MODEL")
@@ -120,18 +127,19 @@ def env_check():
         embedding_api_key = chat_api_key
         embedding_api_base = chat_api_base
     else:
-        logger.error("No valid configuration was found, please check your .env file.")
+        logger.error("未找到有效配置，请检查您的.env文件。")
+        return
 
-    logger.info("🚀 Starting test...\n")
+    logger.info("🚀 开始测试...\n")
     result_embedding = test_embedding(
         embedding_model=embedding_model, embedding_api_key=embedding_api_key, embedding_api_base=embedding_api_base
     )
     result_chat = test_chat(chat_model=chat_model, chat_api_key=chat_api_key, chat_api_base=chat_api_base)
 
     if result_chat and result_embedding:
-        logger.info("✅ All tests completed.")
+        logger.info("✅ 所有测试完成。")
     else:
-        logger.error(" One or more tests failed. Please check credentials or model support.")
+        logger.error("一个或多个测试失败。请检查凭据或模型支持。")
 
 
 def health_check(
@@ -140,15 +148,15 @@ def health_check(
     check_ports: Annotated[bool, typer.Option("--check-ports/--no-check-ports", "-p/-P")] = True,
 ):
     """
-    Run the RD-Agent health check:
-    - Check if Docker is available
-    - Check that the default ports are not occupied
-    - (Optional) Check that the API Key and model are configured correctly.
+    运行RD-Agent健康检查：
+    - 检查Docker是否可用
+    - 检查默认端口是否被占用
+    - (可选) 检查API密钥和模型是否配置正确。
 
-    Args:
-        check_env (bool): Whether to check API Key and model configuration.
-        check_docker (bool): Checks if Docker is installed and running.
-        check_ports (bool): Whether to check if the default port (19899) is occupied.
+    参数：
+        check_env (bool): 是否检查API密钥和模型配置。
+        check_docker (bool): 检查Docker是否已安装并正在运行。
+        check_ports (bool): 是否检查默认端口(19899)是否被占用。
     """
     check_any = False
 
@@ -163,7 +171,7 @@ def health_check(
         check_and_list_free_ports()
 
     if not check_any:
-        logger.warning("⚠️ All health check items are disabled. Please enable at least one check.")
+        logger.warning("⚠️ 所有健康检查项均已禁用。请至少启用一项检查。")
 
 
 if __name__ == "__main__":

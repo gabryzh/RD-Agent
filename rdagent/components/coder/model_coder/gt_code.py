@@ -1,6 +1,6 @@
 """
-This is just an exmaple.
-It will be replaced wtih a list of ground truth tasks.
+这只是一个示例。
+它将被一系列真实的基准任务所取代。
 """
 
 import math
@@ -16,44 +16,41 @@ from torch_geometric.typing import Adj
 
 
 class AntiSymmetricConv(torch.nn.Module):
-    r"""The anti-symmetric graph convolutional operator from the
-    `"Anti-Symmetric DGN: a stable architecture for Deep Graph Networks"
-    <https://openreview.net/forum?id=J3Y7cgZOOS>`_ paper.
+    r"""来自论文《Anti-Symmetric DGN: a stable architecture for Deep Graph Networks》
+    <https://openreview.net/forum?id=J3Y7cgZOOS> 的反对称图卷积算子。
 
-    .. math::
+    数学公式:
         \mathbf{x}^{\prime}_i = \mathbf{x}_i + \epsilon \cdot \sigma \left(
             (\mathbf{W}-\mathbf{W}^T-\gamma \mathbf{I}) \mathbf{x}_i +
             \Phi(\mathbf{X}, \mathcal{N}_i) + \mathbf{b}\right),
 
-    where :math:`\Phi(\mathbf{X}, \mathcal{N}_i)` denotes a
-    :class:`~torch.nn.conv.MessagePassing` layer.
+    其中 :math:`\Phi(\mathbf{X}, \mathcal{N}_i)` 表示一个
+    :class:`~torch.nn.conv.MessagePassing` 层。
 
     Args:
-        in_channels (int): Size of each input sample.
-        phi (MessagePassing, optional): The message passing module
-            :math:`\Phi`. If set to :obj:`None`, will use a
-            :class:`~torch_geometric.nn.conv.GCNConv` layer as default.
-            (default: :obj:`None`)
-        num_iters (int, optional): The number of times the anti-symmetric deep
-            graph network operator is called. (default: :obj:`1`)
-        epsilon (float, optional): The discretization step size
-            :math:`\epsilon`. (default: :obj:`0.1`)
-        gamma (float, optional): The strength of the diffusion :math:`\gamma`.
-            It regulates the stability of the method. (default: :obj:`0.1`)
-        act (str, optional): The non-linear activation function :math:`\sigma`,
-            *e.g.*, :obj:`"tanh"` or :obj:`"relu"`. (default: :class:`"tanh"`)
-        act_kwargs (Dict[str, Any], optional): Arguments passed to the
-            respective activation function defined by :obj:`act`.
-            (default: :obj:`None`)
-        bias (bool, optional): If set to :obj:`False`, the layer will not learn
-            an additive bias. (default: :obj:`True`)
+        in_channels (int): 每个输入样本的大小。
+        phi (MessagePassing, optional): 消息传递模块 :math:`\Phi`。
+            如果设置为 :obj:`None`，将默认使用 :class:`~torch_geometric.nn.conv.GCNConv` 层。
+            (默认: :obj:`None`)
+        num_iters (int, optional): 调用反对称深度图网络算子的次数。
+            (默认: :obj:`1`)
+        epsilon (float, optional): 离散化步长 :math:`\epsilon`。
+            (默认: :obj:`0.1`)
+        gamma (float, optional): 扩散强度 :math:`\gamma`。
+            它调节方法的稳定性。(默认: :obj:`0.1`)
+        act (str, optional): 非线性激活函数 :math:`\sigma`，
+            例如 :obj:`"tanh"` 或 :obj:`"relu"`。(默认: :class:`"tanh"`)
+        act_kwargs (Dict[str, Any], optional): 传递给由 :obj:`act` 定义的
+            相应激活函数的参数。(默认: :obj:`None`)
+        bias (bool, optional): 如果设置为 :obj:`False`，该层将不学习
+            加性偏置。(默认: :obj:`True`)
 
-    Shapes:
-        - **input:**
-          node features :math:`(|\mathcal{V}|, F_{in})`,
-          edge indices :math:`(2, |\mathcal{E}|)`,
-          edge weights :math:`(|\mathcal{E}|)` *(optional)*
-        - **output:** node features :math:`(|\mathcal{V}|, F_{in})`
+    形状:
+        - **输入:**
+          节点特征 :math:`(|\mathcal{V}|, F_{in})`,
+          边索引 :math:`(2, |\mathcal{E}|)`,
+          边权重 :math:`(|\mathcal{E}|)` *(可选)*
+        - **输出:** 节点特征 :math:`(|\mathcal{V}|, F_{in})`
     """
 
     def __init__(
@@ -76,9 +73,11 @@ class AntiSymmetricConv(torch.nn.Module):
         self.act = activation_resolver(act, **(act_kwargs or {}))
 
         if phi is None:
+            # 如果未提供消息传递模块，则默认为GCNConv
             phi = GCNConv(in_channels, in_channels, bias=False)
 
         self.W = Parameter(torch.empty(in_channels, in_channels))
+        # 将单位矩阵注册为缓冲区，它不是模型参数
         self.register_buffer("eye", torch.eye(in_channels))
         self.phi = phi
 
@@ -90,17 +89,21 @@ class AntiSymmetricConv(torch.nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        r"""Resets all learnable parameters of the module."""
+        r"""重置模块的所有可学习参数。"""
         torch.nn.init.kaiming_uniform_(self.W, a=math.sqrt(5))
         self.phi.reset_parameters()
         zeros(self.bias)
 
     def forward(self, x: Tensor, edge_index: Adj, *args, **kwargs) -> Tensor:
-        r"""Runs the forward pass of the module."""
+        r"""执行模块的前向传播。"""
+        # 构建反对称权重矩阵
         antisymmetric_W = self.W - self.W.t() - self.gamma * self.eye
 
+        # 迭代更新节点特征
         for _ in range(self.num_iters):
+            # 消息传递
             h = self.phi(x, edge_index, *args, **kwargs)
+            # 线性变换
             h = x @ antisymmetric_W.t() + h
 
             if self.bias is not None:
@@ -109,6 +112,7 @@ class AntiSymmetricConv(torch.nn.Module):
             if self.act is not None:
                 h = self.act(h)
 
+            # 更新节点表示
             x = x + self.epsilon * h
 
         return x
@@ -125,12 +129,13 @@ class AntiSymmetricConv(torch.nn.Module):
 
 
 if __name__ == "__main__":
+    # 加载示例数据
     node_features = torch.load("node_features.pt")
     edge_index = torch.load("edge_index.pt")
 
-    # Model instantiation and forward pass
+    # 模型实例化和前向传播
     model = AntiSymmetricConv(in_channels=node_features.size(-1))
     output = model(node_features, edge_index)
 
-    # Save output to a file
+    # 将输出保存到文件
     torch.save(output, "gt_output.pt")

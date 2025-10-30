@@ -1,3 +1,3 @@
 """
-Some agent that can be shared across different scenarios.
+一些可以在不同场景之间共享的代理。
 """

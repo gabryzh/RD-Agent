@@ -4,93 +4,93 @@ from rdagent.core.conf import ExtendedBaseSettings
 
 
 class KaggleBasePropSetting(ExtendedBaseSettings):
+    """Kaggle竞赛场景的基础配置类"""
     model_config = SettingsConfigDict(env_prefix="KG_", protected_namespaces=())
 
-    # 1) overriding the default
+    # 1) 覆盖默认设置
     scen: str = "rdagent.scenarios.kaggle.experiment.scenario.KGScenario"
-    """Scenario class for data mining model"""
+    """数据挖掘模型的场景类"""
 
     hypothesis_gen: str = "rdagent.scenarios.kaggle.proposal.proposal.KGHypothesisGen"
-    """Hypothesis generation class"""
+    """假设生成类"""
 
     hypothesis2experiment: str = "rdagent.scenarios.kaggle.proposal.proposal.KGHypothesis2Experiment"
-    """Hypothesis to experiment class"""
+    """假设到实验的转换类"""
 
     feature_coder: str = "rdagent.scenarios.kaggle.developer.coder.KGFactorCoSTEER"
-    """Feature Coder class"""
+    """特征编码器类"""
 
     model_feature_selection_coder: str = "rdagent.scenarios.kaggle.developer.coder.KGModelFeatureSelectionCoder"
-    """Model Feature Selection Coder class"""
+    """模型特征选择编码器类"""
 
     model_coder: str = "rdagent.scenarios.kaggle.developer.coder.KGModelCoSTEER"
-    """Model Coder class"""
+    """模型编码器类"""
 
     feature_runner: str = "rdagent.scenarios.kaggle.developer.runner.KGFactorRunner"
-    """Feature Runner class"""
+    """特征运行器类"""
 
     model_runner: str = "rdagent.scenarios.kaggle.developer.runner.KGModelRunner"
-    """Model Runner class"""
+    """模型运行器类"""
 
     summarizer: str = "rdagent.scenarios.kaggle.developer.feedback.KGExperiment2Feedback"
-    """Summarizer class"""
+    """摘要器类"""
 
     evolving_n: int = 10
-    """Number of evolutions"""
+    """演进次数"""
 
     competition: str = ""
-    """Kaggle competition name, e.g., 'sf-crime'"""
+    """Kaggle竞赛名称，例如 'sf-crime'"""
 
     template_path: str = "rdagent/scenarios/kaggle/experiment/templates"
-    """Kaggle competition base templates path"""
+    """Kaggle竞赛基础模板路径"""
 
     local_data_path: str = ""
-    """Folder storing Kaggle competition data"""
+    """存储Kaggle竞赛数据的文件夹"""
 
-    # Evaluation on Test related
+    # 测试评估相关
     if_using_mle_data: bool = False
     auto_submit: bool = False
-    """Automatically upload and submit each experiment result to Kaggle platform"""
+    """自动将每个实验结果上传并提交到Kaggle平台"""
 
-    # Conditionally set the knowledge_base based on the use of graph RAG
     knowledge_base: str = ""
-    """Knowledge base class, uses 'KGKnowledgeGraph' when advanced graph-based RAG is enabled, otherwise empty."""
+    """知识库类，启用高级图RAG时使用'KGKnowledgeGraph'，否则为空。"""
     if_action_choosing_based_on_UCB: bool = False
-    """Enable decision mechanism based on UCB algorithm"""
+    """启用基于UCB算法的决策机制"""
 
     domain_knowledge_path: str = "/data/userdata/share/kaggle/domain_knowledge"
-    """Folder storing domain knowledge files in .case format"""
+    """存储领域知识文件的文件夹（.case格式）"""
 
     knowledge_base_path: str = "kg_graph.pkl"
-    """Advanced version of graph-based RAG"""
+    """高级版图RAG的路径"""
 
     rag_path: str = "git_ignore_folder/kaggle_vector_base.pkl"
-    """Base version of vector-based RAG"""
+    """基础版向量RAG的路径"""
 
     if_using_vector_rag: bool = False
-    """Enable basic vector-based RAG"""
+    """启用基础版向量RAG"""
 
     if_using_graph_rag: bool = False
-    """Enable advanced graph-based RAG"""
+    """启用高级版图RAG"""
 
     mini_case: bool = False
-    """Enable mini-case study for experiments"""
+    """为实验启用迷你案例研究"""
 
     time_ratio_limit_to_enable_hyperparameter_tuning: float = 1
     """
-    Runner time ratio limit to enable hyperparameter tuning, if not change, hyperparameter tuning is always enabled in the first evolution.
+    启用超参数调整的运行器时间比例限制，如果不更改，则在第一次演进中始终启用超参数调整。
     """
 
     res_time_ratio_limit_to_enable_hyperparameter_tuning: float = 1
     """
-    Overall rest time ratio limit to enable hyperparameter tuning, if not change, hyperparameter tuning is always enabled in the first evolution.
-    `1` indicate we enable hyperparameter tuning when we have 100% residual time. (so hyperparameter tuning is always enabled)
+    启用超参数调整的总体剩余时间比例限制，如果不更改，则在第一次演进中始终启用超参数调整。
+    `1`表示当剩余时间为100%时启用超参数调整（因此始终启用）。
     """
 
     only_first_loop_enable_hyperparameter_tuning: bool = True
-    """Enable hyperparameter tuning feedback only in the first loop of evaluation."""
+    """仅在评估的第一轮中启用超参数调整反馈。"""
 
     only_enable_tuning_in_merge: bool = False
-    """Enable hyperparameter tuning only in the merge stage"""
+    """仅在合并阶段启用超参数调整"""
 
 
 KAGGLE_IMPLEMENT_SETTING = KaggleBasePropSetting()

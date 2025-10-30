@@ -16,26 +16,40 @@ from rdagent.core.knowledge_base import KnowledgeBase
 from rdagent.log import rdagent_logger as logger
 from rdagent.oai.llm_utils import APIBackend
 
+# 类型别名，Node 代表知识元数据
 Node = KnowledgeMetaData
 
 
 class UndirectedNode(Node):
+    """无向图节点类，继承自 Node。"""
     def __init__(self, content: str = "", label: str = "", embedding: Any = None, appendix: Any = None) -> None:
+        """
+        初始化一个无向图节点。
+
+        Args:
+            content (str): 节点内容。
+            label (str): 节点标签。
+            embedding (Any): 节点的嵌入向量。
+            appendix (Any): 附加信息。
+        """
         super().__init__(content, label, embedding)
-        self.neighbors: set[UndirectedNode] = set()
-        self.appendix = appendix  # appendix stores any additional information
-        assert isinstance(content, str), "content must be a string"
+        self.neighbors: set[UndirectedNode] = set()  # 邻居节点集合
+        self.appendix = appendix  # 存储任何附加信息
+        assert isinstance(content, str), "节点内容必须是字符串"
 
     def add_neighbor(self, node: UndirectedNode) -> None:
+        """添加一个邻居节点（无向关系）。"""
         self.neighbors.add(node)
         node.neighbors.add(self)
 
     def remove_neighbor(self, node: UndirectedNode) -> None:
+        """移除一个邻居节点（无向关系）。"""
         if node in self.neighbors:
             self.neighbors.remove(node)
             node.neighbors.remove(self)
 
     def get_neighbors(self) -> set[UndirectedNode]:
+        """获取所有邻居节点。"""
         return self.neighbors
 
     def __str__(self) -> str:
@@ -53,29 +67,35 @@ class UndirectedNode(Node):
 
 class Graph(KnowledgeBase):
     """
-    base Graph class for Knowledge Graph Search
+    用于知识图谱搜索的基础图类。
     """
 
     def __init__(self, path: str | Path | None = None) -> None:
-        self.nodes = {}
+        self.nodes = {}  # 存储图中所有节点的字典
         super().__init__(path=path)
 
     def size(self) -> int:
+        """返回图的大小（节点数量）。"""
         return len(self.nodes)
 
     def get_node(self, node_id: str) -> Node | None:
+        """根据节点ID获取节点。"""
         return self.nodes.get(node_id)
 
     def add_node(self, **kwargs: Any) -> NoReturn:
+        """添加节点的抽象方法，需要在子类中实现。"""
         raise NotImplementedError
 
     def get_all_nodes(self) -> list[Node]:
+        """获取图中所有的节点列表。"""
         return list(self.nodes.values())
 
     def get_all_nodes_by_label_list(self, label_list: list[str]) -> list[Node]:
+        """根据标签列表获取所有匹配的节点。"""
         return [node for node in self.nodes.values() if node.label in label_list]
 
     def find_node(self, content: str, label: str) -> Node | None:
+        """根据内容和标签查找节点。"""
         for node in self.nodes.values():
             if node.content == content and node.label == label:
                 return node
@@ -83,20 +103,23 @@ class Graph(KnowledgeBase):
 
     @staticmethod
     def batch_embedding(nodes: list[Node]) -> list[Node]:
+        """
+        批量为节点生成嵌入向量。
+        """
         contents = [node.content for node in nodes]
-        # openai create embedding API input's max length is 16
+        # OpenAI 创建嵌入 API 的输入最大长度为 16
         size = 16
         embeddings = []
         for i in range(0, len(contents), size):
             logger.info(
-                f"Creating embedding for index {i} to {i + size} with {len(contents)} contents",
+                f"为索引 {i} 到 {i + size} 的 {len(contents)} 个内容创建嵌入",
                 tag="batch embedding",
             )
             embeddings.extend(
                 APIBackend().create_embedding(input_content=contents[i : i + size]),
             )
 
-        assert len(nodes) == len(embeddings), "nodes' length must equals embeddings' length"
+        assert len(nodes) == len(embeddings), "节点列表长度必须等于嵌入列表长度"
         for node, embedding in zip(nodes, embeddings):
             node.embedding = embedding
         return nodes
@@ -107,11 +130,11 @@ class Graph(KnowledgeBase):
 
 class UndirectedGraph(Graph):
     """
-    Undirected Graph which edges have no relationship
+    无向图类，边没有方向性。
     """
 
     def __init__(self, path: str | Path | None = None) -> None:
-        self.vector_base: VectorBase = PDVectorBase()
+        self.vector_base: VectorBase = PDVectorBase()  # 向量数据库
         super().__init__(path=path)
 
     def __str__(self) -> str:
@@ -124,27 +147,20 @@ class UndirectedGraph(Graph):
         same_node_threshold: float = 0.95,  # noqa: ARG002
     ) -> None:
         """
-        add node and neighbor to the Graph
-        Parameters
-        ----------
-        same_node_threshold: 0.95 is an empirical value. When two strings only differ in case, the similarity is greater
-         than 0.95.
-        node
-        neighbor
+        向图中添加节点和邻居。
+        如果节点已存在（通过ID或内容+标签判断），则使用现有节点。
+        否则，创建嵌入并将其添加到图和向量数据库中。
 
-        Returns
-        -------
-
+        Args:
+            same_node_threshold (float): 相似度阈值，用于判断是否为同一节点（经验值）。
+            node (UndirectedNode): 要添加的节点。
+            neighbor (UndirectedNode, optional): 要连接的邻居节点。
         """
         if tmp_node := self.get_node(node.id):
             node = tmp_node
         elif tmp_node := self.find_node(content=node.content, label=node.label):
             node = tmp_node
         else:
-            # same_node = self.semantic_search(node=node.content, similarity_threshold=same_node_threshold, topk_k=1)
-            # if len(same_node):
-            #     node = same_node[0]
-            # else:
             node.create_embedding()
             self.vector_base.add(document=node)
             self.nodes.update({node.id: node})
@@ -155,11 +171,6 @@ class UndirectedGraph(Graph):
             elif tmp_neighbor := self.find_node(content=neighbor.content, label=node.label):
                 neighbor = tmp_neighbor
             else:
-                # same_node = self.semantic_search(node=neighbor.content,
-                #                                  similarity_threshold=same_node_threshold, topk_k=1)
-                # if len(same_node):
-                #     neighbor = same_node[0]
-                # else:
                 neighbor.create_embedding()
                 self.vector_base.add(document=neighbor)
                 self.nodes.update({neighbor.id: neighbor})
@@ -167,6 +178,7 @@ class UndirectedGraph(Graph):
             node.add_neighbor(neighbor)
 
     def add_nodes(self, node: UndirectedNode, neighbors: list[UndirectedNode]) -> None:
+        """批量添加邻居节点。"""
         if not neighbors:
             self.add_node(node)
         else:
@@ -174,21 +186,13 @@ class UndirectedGraph(Graph):
                 self.add_node(node, neighbor=neighbor)
 
     def get_node(self, node_id: str) -> UndirectedNode:
+        """根据ID获取节点。"""
         return self.nodes.get(node_id)
 
     def get_node_by_content(self, content: str) -> UndirectedNode | None:
         """
-        Get node by semantic distance
-        Parameters
-        ----------
-        content
-
-        Returns
-        -------
-
+        通过语义距离获取节点。
         """
-        if content == "Model":
-            pass
         match = self.semantic_search(node=content, similarity_threshold=0.999)
         if match:
             return match[0]
@@ -203,7 +207,7 @@ class UndirectedGraph(Graph):
         block: bool = False,
     ) -> list[UndirectedNode]:
         """
-        Returns the nodes in the graph whose distance from node is less than or equal to step
+        返回图中与起始节点距离小于等于指定步数的节点（BFS算法）。
         """
         visited = set()
         queue = deque([(start_node, 0)])
@@ -219,10 +223,8 @@ class UndirectedGraph(Graph):
                 visited.add(node)
                 result.append(node)
 
-                for neighbor in sorted(
-                    self.get_node(node.id).neighbors,
-                    key=lambda x: x.content,
-                ):  # to make sure the result is deterministic
+                # 对邻居进行排序以确保结果的确定性
+                for neighbor in sorted(self.get_node(node.id).neighbors, key=lambda x: x.content):
                     if neighbor not in visited and not (block and neighbor.label not in constraint_labels):
                         queue.append((neighbor, current_steps + 1))
 
@@ -239,37 +241,18 @@ class UndirectedGraph(Graph):
         constraint_labels: list[str] | None = None,
     ) -> list[UndirectedNode]:
         """
-        Get the intersection with nodes connected within n steps of nodes
-
-        Parameters
-        ----------
-        nodes
-        steps
-        constraint_labels
-
-        Returns
-        -------
-
+        获取多个节点在n步内连接的节点的交集。
         """
         min_nodes_count = 2
-        assert len(nodes) >= min_nodes_count, "nodes length must >=2"
+        assert len(nodes) >= min_nodes_count, "节点列表长度必须大于等于2"
         intersection = None
 
         for node in nodes:
+            connected_nodes = self.get_nodes_within_steps(node, steps=steps, constraint_labels=constraint_labels)
             if intersection is None:
-                intersection = self.get_nodes_within_steps(
-                    node,
-                    steps=steps,
-                    constraint_labels=constraint_labels,
-                )
-            intersection = self.intersection(
-                nodes1=intersection,
-                nodes2=self.get_nodes_within_steps(
-                    node,
-                    steps=steps,
-                    constraint_labels=constraint_labels,
-                ),
-            )
+                intersection = connected_nodes
+            else:
+                intersection = self.intersection(nodes1=intersection, nodes2=connected_nodes)
         return intersection
 
     def semantic_search(
@@ -280,27 +263,17 @@ class UndirectedGraph(Graph):
         constraint_labels: list[str] | None = None,
     ) -> list[UndirectedNode]:
         """
-        Semantic search by node's embedding.
+        通过节点的嵌入向量进行语义搜索。
 
-        Parameters
-        ----------
-        node : UndirectedNode | str
-            The node to search for.
-        similarity_threshold : float, optional
-            The minimum similarity score for a node to be included in the results.
-            Nodes with a similarity score less than or equal to this threshold will be excluded.
-        topk_k : int, optional
-            The maximum number of similar nodes to return.
-        constraint_labels : list[str], optional
-            If provided, only nodes with matching labels will be considered.
+        Args:
+            node: 用于搜索的节点或内容字符串。
+            similarity_threshold: 相似度阈值，低于此值的将被排除。
+            topk_k: 返回的最相似节点的最大数量。
+            constraint_labels: 标签约束，只在匹配标签的节点中搜索。
 
-        Returns
-        -------
-        list[UndirectedNode]
-            A list of `topk_k` nodes that are semantically similar to the input node, sorted by similarity score.
-            All nodes shall meet the `similarity_threshold` and `constraint_labels` criteria.
+        Returns:
+            按相似度排序的节点列表。
         """
-        # Question: why do we need to convert to Node object first?
         if isinstance(node, str):
             node = UndirectedNode(content=node)
         docs, scores = self.vector_base.search(
@@ -312,8 +285,9 @@ class UndirectedGraph(Graph):
         return [self.get_node(doc.id) for doc in docs]
 
     def clear(self) -> None:
+        """清空图和向量数据库。"""
         self.nodes.clear()
-        self.vector_base: VectorBase = PDVectorBase()
+        self.vector_base = PDVectorBase()
 
     def query_by_node(
         self,
@@ -326,19 +300,10 @@ class UndirectedGraph(Graph):
         block: bool = False,
     ) -> list[UndirectedNode]:
         """
-        search graph by connection, return empty list if nodes' chain without node near to constraint_node
-        Parameters
-        ----------
-        node
-        step
-        constraint_labels
-        constraint_node
-        constraint_distance
-        block: despite the start node, the search can only flow through the constraint_label type nodes
+        通过连接关系进行图搜索。如果结果链中没有靠近约束节点的节点，则返回空列表。
 
-        Returns
-        -------
-
+        Args:
+            block: 除起始节点外，搜索只能流经 constraint_label 类型的节点。
         """
         nodes = self.get_nodes_within_steps(
             start_node=node,
@@ -366,34 +331,8 @@ class UndirectedGraph(Graph):
         block: bool = False,
     ) -> list[UndirectedNode]:
         """
-        Search graph by content similarity and connection relationship, return empty
-        list if nodes' chain without node near to constraint_node.
-
-        Parameters
-        ----------
-        constraint_distance : float
-            The distance between the node and the constraint_node.
-        content : Union[str, List[str]]
-            Content to search for.
-        topk_k: int
-            The upper number of output for each query. If the number of fit nodes is
-            less than topk_k, returns all fit nodes' content.
-        step : int
-            The maximum distance between the start node and the result node.
-        constraint_labels : List[str]
-            The type of nodes that the search can only flow through.
-        constraint_node : UndirectedNode, optional
-            The node that the search can only flow through.
-        similarity_threshold : float
-            The similarity threshold of the content.
-        block: bool
-            Despite the start node, the search can only flow through the constraint_label type nodes.
-
-        Returns
-        -------
-
+        通过内容相似度和连接关系搜索图。
         """
-
         if isinstance(content, str):
             content = [content]
 
@@ -416,42 +355,47 @@ class UndirectedGraph(Graph):
                     block=block,
                 )
                 connected_nodes.extend(
-                    [node for node in graph_query_node_res if node not in connected_nodes],
+                    [n for n in graph_query_node_res if n not in connected_nodes],
                 )
                 if len(connected_nodes) >= topk_k:
                     break
 
             res_list.extend(
-                [node for node in connected_nodes[:topk_k] if node not in res_list],
+                [n for n in connected_nodes[:topk_k] if n not in res_list],
             )
         return res_list
 
     @staticmethod
     def intersection(nodes1: list[UndirectedNode], nodes2: list[UndirectedNode]) -> list[UndirectedNode]:
+        """返回两个节点列表的交集。"""
         return [node for node in nodes1 if node in nodes2]
 
     @staticmethod
     def different(nodes1: list[UndirectedNode], nodes2: list[UndirectedNode]) -> list[UndirectedNode]:
+        """返回两个节点列表的对称差集。"""
         return list(set(nodes1).symmetric_difference(set(nodes2)))
 
     @staticmethod
     def cal_distance(node1: UndirectedNode, node2: UndirectedNode) -> float:
+        """计算两个节点嵌入之间的余弦距离。"""
         return cosine(node1.embedding, node2.embedding)
 
     @staticmethod
     def filter_label(nodes: list[UndirectedNode], labels: list[str]) -> list[UndirectedNode]:
+        """根据标签过滤节点列表。"""
         return [node for node in nodes if node.label in labels]
 
 
-def graph_to_edges(graph: dict[str, list[str]]) -> list[tuple[str, str]]:
-    edges = []
+# --- 辅助函数 ---
 
+def graph_to_edges(graph: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """将邻接表表示的图转换为边列表。"""
+    edges = []
     for node, neighbors in graph.items():
         for neighbor in neighbors:
-            if (node, neighbor) in edges or (neighbor, node) in edges:
-                continue
-            edges.append((node, neighbor))
-
+            # 避免重复添加无向边
+            if (node, neighbor) not in edges and (neighbor, node) not in edges:
+                edges.append((node, neighbor))
     return edges
 
 
@@ -460,12 +404,12 @@ def assign_random_coordinate_to_node(
     scope: float = 1.0,
     origin: tuple[float, float] = (0.0, 0.0),
 ) -> dict[str, tuple[float, float]]:
+    """为节点分配随机坐标。"""
     coordinates = {}
     for node in nodes:
         x = random.SystemRandom().uniform(0, scope) + origin[0]
         y = random.SystemRandom().uniform(0, scope) + origin[1]
         coordinates[node] = (x, y)
-
     return coordinates
 
 
@@ -475,13 +419,12 @@ def assign_isometric_coordinate_to_node(
     x_origin: float = 0.0,
     y_origin: float = 0.0,
 ) -> dict:
+    """为节点分配等距坐标。"""
     coordinates = {}
-
     for i, node in enumerate(nodes):
         x = x_origin + i * x_step
         y = y_origin
         coordinates[node] = (x, y)
-
     return coordinates
 
 
@@ -490,8 +433,11 @@ def curly_node_coordinate(
     center_y: float = 1.0,
     r: float = 1.0,
 ) -> dict:
-    # noto: this method can only curly < 90 degree, and the curl line is circle.
-    # the original function is: x**2 + (y-m)**2 = r**2
+    """
+    将节点的坐标弯曲成圆形路径。
+    注意：此方法只能弯曲小于90度的角度，并且弯曲的线是圆的一部分。
+    原始函数为：x**2 + (y-m)**2 = r**2
+    """
     for node, coordinate in coordinates.items():
         coordinates[node] = (coordinate[0], center_y + (r**2 - coordinate[0] ** 2) ** 0.5)
     return coordinates

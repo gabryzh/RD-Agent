@@ -14,27 +14,27 @@ from rdagent.utils.env import (
 
 
 class DSCoderCoSTEERSettings(CoSTEERSettings):
-    """Data Science CoSTEER settings"""
+    """数据科学 CoSTEER 设置"""
 
     class Config:
         env_prefix = "DS_Coder_CoSTEER_"
 
     max_seconds_multiplier: int = 4
     env_type: str = "docker"
-    # TODO: extract a function for env and conf.
+
     extra_evaluator: list[str] = []
-    """Extra evaluators to use"""
+    """要使用的额外评估器"""
 
     extra_eval: list[str] = []
     """
-    Extra evaluators
+    额外的评估器。
 
-    The evaluator follows the following assumptions:
-    - It runs after previous evaluator (So the running results are already there)
+    评估器遵循以下假设:
+    - 它在前一个评估器之后运行（因此运行结果已经存在）。
 
-    It is not a complete feature due to it is only implemented in DS Pipeline & Coder.
+    这不是一个完整的功能，因为它只在数据科学管道和编码器中实现。
 
-    TODO: The complete version should be implemented in the CoSTEERSettings.
+    TODO: 完整版本应在 CoSTEERSettings 中实现。
     """
 
 
@@ -45,43 +45,52 @@ def get_ds_env(
     enable_cache: bool | None = None,
 ) -> Env:
     """
-    Retrieve the appropriate environment configuration based on the env_type setting.
+    根据 env_type 设置检索适当的环境配置。
 
     Returns:
-        Env: An instance of the environment configured either as DockerEnv or LocalEnv.
+        Env: 配置为 DockerEnv 或 LocalEnv 的环境实例。
 
     Raises:
-        ValueError: If the env_type is not recognized.
+        ValueError: 如果 env_type 无法识别。
     """
     conf = DSCoderCoSTEERSettings()
-    assert conf_type in ["kaggle", "mlebench"], f"Unknown conf_type: {conf_type}"
+    assert conf_type in ["kaggle", "mlebench"], f"未知的 conf_type: {conf_type}"
 
+    # 根据配置选择 Docker 或 Conda 环境
     if conf.env_type == "docker":
         env_conf = DSDockerConf() if conf_type == "kaggle" else MLEBDockerConf()
         env = DockerEnv(conf=env_conf)
     elif conf.env_type == "conda":
-        env = LocalEnv(
-            conf=(
-                CondaConf(conda_env_name=conf_type) if conf_type == "kaggle" else MLECondaConf(conda_env_name=conf_type)
-            )
-        )
+        env_conf = CondaConf(conda_env_name=conf_type) if conf_type == "kaggle" else MLECondaConf(conda_env_name=conf_type)
+        env = LocalEnv(conf=env_conf)
     else:
-        raise ValueError(f"Unknown env type: {conf.env_type}")
+        raise ValueError(f"未知的 env_type: {conf.env_type}")
+
+    # 应用额外的配置
     env.conf.extra_volumes = extra_volumes.copy()
     env.conf.running_timeout_period = running_timeout_period
     if enable_cache is not None:
         env.conf.enable_cache = enable_cache
+
     env.prepare()
     return env
 
 
 def get_clear_ws_cmd(stage: Literal["before_training", "before_inference"] = "before_training") -> str:
     """
-    Clean the files in workspace to a specific stage
+    获取用于将工作空间清理到特定阶段的命令。
+
+    Args:
+        stage: "before_training" 或 "before_inference"。
+
+    Returns:
+        str: 清理命令。
     """
-    assert stage in ["before_training", "before_inference"], f"Unknown stage: {stage}"
+    assert stage in ["before_training", "before_inference"], f"未知的阶段: {stage}"
+
+    # 根据阶段和是否启用模型转储来确定要删除的文件
     if DS_RD_SETTING.enable_model_dump and stage == "before_training":
-        cmd = "rm -r submission.csv scores.csv models trace.log"
+        cmd = "rm -rf submission.csv scores.csv models trace.log"
     else:
-        cmd = "rm submission.csv scores.csv trace.log"
+        cmd = "rm -f submission.csv scores.csv trace.log"
     return cmd

@@ -1,3 +1,4 @@
+# 该文件遵循Python 3.9的语法，并启用了 postponed evaluation of type annotations (PEP 563)
 from __future__ import annotations
 
 import datetime
@@ -35,12 +36,14 @@ from rdagent.core.evolving_framework import (
 from rdagent.core.prompts import Prompts
 from rdagent.oai.llm_utils import APIBackend
 
+# 初始化tree-sitter的Python解析器和CI提示
 py_parser = Parser(Language(tree_sitter_python.language()))
 CI_prompts = Prompts(file_path=Path(__file__).parent / "prompts.yaml")
 
 
 @dataclass
 class CIError:
+    """CI错误的数据类"""
     raw_str: str
     file_path: Path | str
     line: int
@@ -51,17 +54,21 @@ class CIError:
     checker: Literal["ruff", "mypy"]
 
     def to_dict(self) -> dict[str, object]:
+        """将CIError对象转换为字典"""
         return self.__dict__
 
     def __str__(self) -> str:
+        """返回CIError对象的字符串表示"""
         return f"{self.file_path}:{self.line}:{self.column}: {self.code} {self.msg}\n{self.hint}".strip()
 
 
 @dataclass
 class CIFeedback(Feedback):
+    """CI反馈的数据类"""
     errors: dict[str, list[CIError]]
 
     def statistics(self) -> dict[Literal["ruff", "mypy"], dict[str, int]]:
+        """统计错误的数量"""
         error_counts = defaultdict(lambda: defaultdict(int))
         for file_errors in self.errors.values():
             for error in file_errors:
@@ -71,12 +78,14 @@ class CIFeedback(Feedback):
 
 @dataclass
 class FixRecord:
+    """修复记录的数据类"""
     skipped_errors: list[CIError]
     directly_fixed_errors: list[CIError]
     manually_fixed_errors: list[CIError]
     manual_instructions: dict[str, list[CIError]]
 
     def to_dict(self) -> dict[str, Any]:
+        """将FixRecord对象转换为字典"""
         return {
             "skipped_errors": [error.to_dict() for error in self.skipped_errors],
             "directly_fixed_errors": [error.to_dict() for error in self.directly_fixed_errors],
@@ -88,12 +97,14 @@ class FixRecord:
 
 
 class CodeFile:
+    """表示一个代码文件的类"""
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self.load()
 
     @classmethod
-    def add_line_number(cls: CodeFile, code: list[str] | str, start: int = 1) -> list[str] | str:
+    def add_line_number(cls, code: list[str] | str, start: int = 1) -> list[str] | str:
+        """为代码添加行号"""
         code_lines = code.split("\n") if isinstance(code, str) else code
 
         lineno_width = len(str(start - 1 + len(code_lines)))
@@ -104,21 +115,22 @@ class CodeFile:
         return code_with_lineno if isinstance(code, list) else "\n".join(code_with_lineno)
 
     @classmethod
-    def remove_line_number(cls: CodeFile, code: list[str] | str) -> list[str] | str:
+    def remove_line_number(cls, code: list[str] | str) -> list[str] | str:
+        """移除代码中的行号"""
         code_lines = code.split("\n") if isinstance(code, str) else code
 
         try:
             code_without_lineno = [re.split(r"\| ", code_line, maxsplit=1)[1] for code_line in code_lines]
         except IndexError:
-            code_without_lineno = ["something went wrong when remove line numbers", *code_lines]
+            code_without_lineno = ["移除行号时出错", *code_lines]
 
         return code_without_lineno if isinstance(code, list) else "\n".join(code_without_lineno)
 
     def load(self) -> None:
+        """从文件加载代码"""
         code = self.path.read_text(encoding="utf-8")
         self.code_lines = code.split("\n")
 
-        # line numbers
         self.lineno = len(self.code_lines)
         self.lineno_width = len(str(self.lineno))
         self.code_lines_with_lineno = self.add_line_number(self.code_lines)
@@ -132,19 +144,7 @@ class CodeFile:
         return_list: bool = False,
     ) -> list[str] | str:
         """
-        Retrieves a portion of the code lines.
-        line number starts from 1, return codes in [start, end].
-
-        Args:
-            start (int): The starting line number (inclusive). Defaults to 1.
-            end (int | None): The ending line number (inclusive). Defaults to None, which means the last line.
-            add_line_number (bool): Whether to include line numbers in the result. Defaults to False.
-            return_list (bool): Whether to return the result as a list of lines
-                or as a single string. Defaults to False.
-
-        Returns:
-            list[str] | str: The code lines as a list of strings or as a
-                single string, depending on the value of `return_list`.
+        获取代码的一部分。
         """
         start -= 1
         if start < 0:
@@ -158,18 +158,10 @@ class CodeFile:
 
     def apply_changes(self, changes: list[tuple[int, int, str]]) -> None:
         """
-        Applies the given changes to the code lines.
-
-        Args:
-            changes (List[Tuple[int, int, str]]): A list of tuples representing the changes to be applied.
-                Each tuple contains the start line number, end line number, and the new code to be inserted.
-
-        Returns:
-            None
+        将给定的更改应用于代码。
         """
         offset = 0
         for start, end, code in changes:
-            # starts from 1  -->  starts from 0
             adjusted_start = max(start - 1, 0)
 
             new_code = code.split("\n")
@@ -180,6 +172,7 @@ class CodeFile:
         self.load()
 
     def get_code_blocks(self, max_lines: int = 30) -> list[tuple[int, int]]:
+        """获取代码块的列表"""
         tree = py_parser.parse(bytes("\n".join(self.code_lines), "utf8"))
 
         def get_blocks_in_node(node: Node, max_lines: int) -> list[tuple[int, int]]:
@@ -187,7 +180,7 @@ class CodeFile:
                 return [(node.start_point.row, node.end_point.row + 1)]
 
             blocks: list[tuple[int, int]] = []
-            block: tuple[int, int] | None = None  # [start, end), line number starts from 0
+            block: tuple[int, int] | None = None
 
             for child in node.children:
                 if child.end_point.row + 1 - child.start_point.row > max_lines:
@@ -208,7 +201,6 @@ class CodeFile:
 
             return blocks
 
-        # change line number to start from 1 and [start, end) to [start, end]
         return [(a + 1, b) for a, b in get_blocks_in_node(tree.root_node, max_lines)]
 
     def __str__(self) -> str:
@@ -216,6 +208,7 @@ class CodeFile:
 
 
 class Repo(EvolvableSubjects):
+    """表示一个代码仓库的类"""
     def __init__(self, project_path: Path | str, excludes: list[Path] | None = None, **kwargs: Any) -> None:
         if excludes is None:
             excludes = []
@@ -225,7 +218,7 @@ class Repo(EvolvableSubjects):
         excludes = [self.project_path / path for path in excludes]
 
         git_ignored_output = subprocess.check_output(
-            ["/usr/bin/git", "status", "--ignored", "-s"],  # noqa: S603
+            ["/usr/bin/git", "status", "--ignored", "-s"],
             cwd=str(self.project_path),
             stderr=subprocess.STDOUT,
             text=True,
@@ -253,22 +246,7 @@ class Repo(EvolvableSubjects):
 
 @dataclass
 class RuffRule:
-    """
-    Example:
-    {
-        "name": "missing-trailing-comma",
-        "code": "COM812",
-        "linter": "flake8-commas",
-        "summary": "Trailing comma missing",
-        "message_formats": [
-            "Trailing comma missing"
-        ],
-        "fix": "Fix is always available.",
-        "explanation": "...",
-        "preview": false
-    }
-    """
-
+    """Ruff规则的数据类"""
     name: str
     code: str
     linter: str
@@ -280,10 +258,7 @@ class RuffRule:
 
 
 class RuffEvaluator(Evaluator):
-    """
-    The error message are generated by command
-    """
-
+    """Ruff评估器"""
     def __init__(self, command: str | None = None) -> None:
         if command is None:
             self.command = "ruff check . --output-format full"
@@ -292,10 +267,11 @@ class RuffEvaluator(Evaluator):
 
     @staticmethod
     def explain_rule(error_code: str) -> RuffRule:
+        """解释一个Ruff规则"""
         explain_command = f"ruff rule {error_code} --output-format json"
         try:
             out = subprocess.check_output(
-                shlex.split(explain_command),  # noqa: S603
+                shlex.split(explain_command),
                 stderr=subprocess.STDOUT,
                 text=True,
             )
@@ -305,10 +281,10 @@ class RuffEvaluator(Evaluator):
         return RuffRule(**json.loads(out))
 
     def evaluate(self, evo: Repo, **kwargs: dict) -> CIFeedback:
-        """Simply run ruff to get the feedbacks."""
+        """运行Ruff以获取反馈"""
         try:
             out = subprocess.check_output(
-                shlex.split(self.command),  # noqa: S603
+                shlex.split(self.command),
                 cwd=evo.project_path,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -316,18 +292,6 @@ class RuffEvaluator(Evaluator):
         except subprocess.CalledProcessError as e:
             out = e.output
 
-        """ruff output format:
-        rdagent/cli.py:9:5: ANN201 Missing return type annotation for public function `main`
-        |
-        9 | def main(prompt=None):
-        |     ^^^^ ANN201
-        10 |     load_dotenv(verbose=True, override=True)
-        11 |     wm = WorkflowManager()
-        |
-        = help: Add return type annotation: `None`
-        """
-
-        # extract error info
         pattern = r"(([^\n]*):(\d+):(\d+): (\w+) ([^\n]*)\n(.*?))\n\n"
         matches = re.findall(pattern, out, re.DOTALL)
 
@@ -336,7 +300,6 @@ class RuffEvaluator(Evaluator):
         for match in matches:
             raw_str, file_path, line_number, column_number, error_code, error_message, error_hint = match
 
-            # TODO @bowen: filter these files when running the check command
             if evo.project_path / Path(file_path) not in evo.files:
                 continue
             error = CIError(
@@ -356,6 +319,7 @@ class RuffEvaluator(Evaluator):
 
 
 class MypyEvaluator(Evaluator):
+    """Mypy评估器"""
     def __init__(self, command: str | None = None) -> None:
         if command is None:
             self.command = "mypy . --pretty --no-error-summary --show-column-numbers"
@@ -363,9 +327,10 @@ class MypyEvaluator(Evaluator):
             self.command = command
 
     def evaluate(self, evo: Repo, **kwargs: dict) -> CIFeedback:
+        """运行Mypy以获取反馈"""
         try:
             out = subprocess.check_output(
-                shlex.split(self.command),  # noqa: S603
+                shlex.split(self.command),
                 cwd=evo.project_path,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -390,7 +355,7 @@ class MypyEvaluator(Evaluator):
                 )[0]
                 error_hint_help = re.findall(r"^.*?:\d+:\d+: note: (.*)$", error_hint, flags=re.MULTILINE)
                 error_hint_help = "\n".join(error_hint_help)
-                error_hint = f"{error_hint_position}\nHelp:\n{error_hint_help}"
+                error_hint = f"{error_hint_position}\n帮助:\n{error_hint_help}"
 
             if evo.project_path / Path(file_path) not in evo.files:
                 continue
@@ -411,17 +376,18 @@ class MypyEvaluator(Evaluator):
 
 
 class MultiEvaluator(Evaluator):
+    """多评估器，用于组合多个评估器"""
     def __init__(self, *evaluators: Evaluator) -> None:
         self.evaluators = evaluators
 
     def evaluate(self, evo: Repo, **kwargs: dict) -> CIFeedback:
+        """运行所有评估器并合并结果"""
         all_errors = defaultdict(list)
         for evaluator in self.evaluators:
             feedback: CIFeedback = evaluator.evaluate(evo, **kwargs)
             for file_path, errors in feedback.errors.items():
                 all_errors[file_path].extend(errors)
 
-        # sort errors by position
         for file_path in all_errors:
             all_errors[file_path].sort(key=lambda x: (x.line, x.column))
 
@@ -429,13 +395,15 @@ class MultiEvaluator(Evaluator):
 
 
 class CIEvoStr(EvolvingStrategy):
-    def evolve(  # noqa: C901, PLR0912, PLR0915
+    """CI演进策略"""
+    def evolve(
         self,
         evo: Repo,
         evolving_trace: list[EvoStep] | None = None,
         knowledge_l: list[Knowledge] | None = None,
         **kwargs: dict,
     ) -> Repo:
+        """演进代码仓库以修复CI错误"""
         @dataclass
         class CodeFixGroup:
             start_line: int
@@ -450,15 +418,14 @@ class CIEvoStr(EvolvingStrategy):
         if len(evolving_trace) > 0:
             last_feedback: CIFeedback = evolving_trace[-1].feedback
 
-            # print statistics
             checker_error_counts = {
                 checker: sum(c_statistics.values()) for checker, c_statistics in last_feedback.statistics().items()
             }
             print(
-                f"Found [red]{sum(checker_error_counts.values())}[/red] errors, "
-                "including: "
+                f"发现 [red]{sum(checker_error_counts.values())}[/red] 个错误, "
+                "包括: "
                 + ", ".join(
-                    f"[red]{count}[/red] [magenta]{checker}[/magenta] errors"
+                    f"[red]{count}[/red] 个 [magenta]{checker}[/magenta] 错误"
                     for checker, count in checker_error_counts.items()
                 ),
             )
@@ -467,32 +434,25 @@ class CIEvoStr(EvolvingStrategy):
                 lambda: FixRecord([], [], [], defaultdict(list)),
             )
 
-            # Group errors by code blocks
             fix_groups: dict[str, list[CodeFixGroup]] = defaultdict(list)
             changes: dict[str, list[tuple[int, int, str]]] = defaultdict(list)
             for file_path, errors in last_feedback.errors.items():
                 file = evo.files[evo.project_path / Path(file_path)]
 
-                # check if the file needs to add `from __future__ import annotations`
-                # need to add rules here for different languages/tools
-                # TODO @bowen: current way of handling errors like 'Add import statement' may be not good
                 for error in errors:
                     if error.code in ("FA100", "FA102"):
                         changes[file_path].append((1, 1, "from __future__ import annotations\n"))
                         break
 
-                # Group errors by code blocks
                 error_p = 0
                 for start_line, end_line in file.get_code_blocks(max_lines=30):
                     group_errors: list[CIError] = []
 
-                    # collect errors in the same code block
                     while error_p < len(errors) and start_line <= errors[error_p].line <= end_line:
                         if errors[error_p].code not in ("FA100", "FA102"):
                             group_errors.append(errors[error_p])
                         error_p += 1
 
-                    # process errors in the code block
                     if group_errors:
                         session = api.build_chat_session(session_system_prompt=system_prompt)
                         session_id = session.get_conversation_id()
@@ -504,26 +464,17 @@ class CIEvoStr(EvolvingStrategy):
                             CodeFixGroup(start_line, end_line, group_errors, session_id, []),
                         )
 
-            # Fix errors in each code block
             with Progress(SpinnerColumn(), *Progress.get_default_columns(), TimeElapsedColumn()) as progress:
                 group_counts = sum([len(groups) for groups in fix_groups.values()])
-                task_id = progress.add_task("Fixing repo...", total=group_counts)
+                task_id = progress.add_task("修复仓库中...", total=group_counts)
 
                 for file_path in fix_groups:
                     file = evo.files[evo.project_path / Path(file_path)]
                     for code_fix_g in fix_groups[file_path]:
-                        start_line = code_fix_g.start_line
-                        end_line = code_fix_g.end_line
-                        group_errors = code_fix_g.errors
-                        code_snippet_with_lineno = file.get(
-                            start_line,
-                            end_line,
-                            add_line_number=True,
-                            return_list=False,
-                        )
+                        start_line, end_line, group_errors = code_fix_g.start_line, code_fix_g.end_line, code_fix_g.errors
+                        code_snippet_with_lineno = file.get(start_line, end_line, add_line_number=True, return_list=False)
                         errors_str = "\n\n".join(str(e) for e in group_errors)
 
-                        # ask LLM to repair current code snippet
                         user_prompt = CI_prompts["session_normal_template"].format(
                             code=code_snippet_with_lineno,
                             lint_info=errors_str,
@@ -537,15 +488,14 @@ class CIEvoStr(EvolvingStrategy):
                         code_fix_g.responses.append(res)
                         progress.update(
                             task_id,
-                            description=f"[green]Fixing[/green] [cyan]{file_path}[/cyan]...",
+                            description=f"[green]修复中[/green] [cyan]{file_path}[/cyan]...",
                             advance=1,
                         )
 
-            # Manual inspection and repair
             for file_path in last_feedback.errors:
                 print(
                     Rule(
-                        f"[bright_blue]Checking[/bright_blue] [cyan]{file_path}[/cyan]",
+                        f"[bright_blue]检查中[/bright_blue] [cyan]{file_path}[/cyan]",
                         style="bright_blue",
                         align="left",
                         characters=".",
@@ -554,12 +504,11 @@ class CIEvoStr(EvolvingStrategy):
 
                 file = evo.files[evo.project_path / Path(file_path)]
 
-                # generate changes
                 for group_id, code_fix_g in enumerate(fix_groups[file_path], start=1):
                     start_line, end_line, group_errors = code_fix_g.start_line, code_fix_g.end_line, code_fix_g.errors
                     session = api.build_chat_session(conversation_id=code_fix_g.session_id)
 
-                    print(f"[yellow]Checking part {group_id}...[/yellow]")
+                    print(f"[yellow]检查部分 {group_id}...[/yellow]")
 
                     front_context = file.get(start_line - 3, start_line - 1)
                     rear_context = file.get(end_line + 1, end_line + 3)
@@ -568,7 +517,6 @@ class CIEvoStr(EvolvingStrategy):
 
                     code_snippet_with_lineno = file.get(start_line, end_line, add_line_number=True, return_list=False)
 
-                    # print errors
                     printed_errors_str = "\n".join(
                         [
                             f"[{error.checker}] {error.line: >{file.lineno_width}}:{error.column: <4}"
@@ -579,11 +527,10 @@ class CIEvoStr(EvolvingStrategy):
                     print(
                         Panel.fit(
                             Syntax(printed_errors_str, lexer="python", background_color="default"),
-                            title=f"{len(group_errors)} Errors",
+                            title=f"{len(group_errors)} 个错误",
                         ),
                     )
 
-                    # print original code
                     table = Table(show_header=False, box=None)
                     table.add_column()
                     table.add_row(Syntax(front_context_with_lineno, lexer="python", background_color="default"))
@@ -591,7 +538,7 @@ class CIEvoStr(EvolvingStrategy):
                     table.add_row(Syntax(code_snippet_with_lineno, lexer="python", background_color="default"))
                     table.add_row(Rule(style="dark_orange"))
                     table.add_row(Syntax(rear_context_with_lineno, lexer="python", background_color="default"))
-                    print(Panel.fit(table, title="Original Code"))
+                    print(Panel.fit(table, title="原始代码"))
 
                     res = code_fix_g.responses[0]
                     code_snippet_lines = file.get(start_line, end_line, add_line_number=False, return_list=True)
@@ -600,7 +547,7 @@ class CIEvoStr(EvolvingStrategy):
                         try:
                             new_code = re.search(r".*```[Pp]ython\n(.*?)\n```.*", res, re.DOTALL).group(1)
                         except (re.error, AttributeError) as exc:
-                            print(f"[red]Error when extract codes[/red]:\n {res}\nException: {exc}")
+                            print(f"[red]提取代码时出错[/red]:\n {res}\n异常: {exc}")
                         try:
                             fixed_errors_info = re.search(r".*```[Jj]son\n(.*?)\n```.*", res, re.DOTALL).group(1)
                             fixed_errors_info = json.loads(fixed_errors_info)
@@ -608,14 +555,12 @@ class CIEvoStr(EvolvingStrategy):
                             fixed_errors_info = None
                         except (json.JSONDecodeError, re.error) as exc:
                             fixed_errors_info = None
-                            print(f"[red]Error when extracting fixed_errors[/red]: {exc}")
+                            print(f"[red]提取fixed_errors时出错[/red]: {exc}")
 
                         new_code = CodeFile.remove_line_number(new_code)
 
-                        # print repair status (code diff)
                         diff = ndiff(code_snippet_lines, new_code.split("\n"))
 
-                        # add 2 spaces to align with diff format
                         front_context = re.sub(r"^", "  ", front_context, flags=re.MULTILINE)
                         rear_context = re.sub(r"^", "  ", rear_context, flags=re.MULTILINE)
 
@@ -629,37 +574,23 @@ class CIEvoStr(EvolvingStrategy):
                         diff_new_lineno = start_line
                         for i in diff:
                             if i.startswith("+"):
-                                table.add_row(
-                                    "",
-                                    Text(str(diff_new_lineno), style="green bold"),
-                                    Text(i, style="green"),
-                                )
+                                table.add_row("", Text(str(diff_new_lineno), style="green bold"), Text(i, style="green"))
                                 diff_new_lineno += 1
                             elif i.startswith("-"):
-                                table.add_row(
-                                    Text(str(diff_original_lineno), style="red bold"),
-                                    "",
-                                    Text(i, style="red"),
-                                )
+                                table.add_row(Text(str(diff_original_lineno), style="red bold"), "", Text(i, style="red"))
                                 diff_original_lineno += 1
                             elif i.startswith("?"):
                                 table.add_row("", "", Text(i, style="yellow"))
                             else:
-                                table.add_row(
-                                    str(diff_original_lineno),
-                                    str(diff_new_lineno),
-                                    Syntax(i, lexer="python", background_color="default"),
-                                )
+                                table.add_row(str(diff_original_lineno), str(diff_new_lineno), Syntax(i, lexer="python", background_color="default"))
                                 diff_original_lineno += 1
                                 diff_new_lineno += 1
                         table.add_row("", "", Rule(style="dark_orange"))
                         table.add_row("", "", Syntax(rear_context, lexer="python", background_color="default"))
-                        print(Panel.fit(table, title="Repair Status"))
+                        print(Panel.fit(table, title="修复状态"))
 
                         operation = Prompt.ask(
-                            "Input your operation [ [red]([bold]s[/bold])kip[/red] / "
-                            "[green]([bold]a[/bold])pply[/green] / "
-                            "[yellow]manual instruction[/yellow] ]",
+                            "输入您的操作 [ [red]([bold]s[/bold])跳过[/red] / [green]([bold]a[/bold])应用[/green] / [yellow]手动指令[/yellow] ]",
                         )
                         print()
                         if operation in ("s", "skip"):
@@ -685,7 +616,6 @@ class CIEvoStr(EvolvingStrategy):
                         )
                         code_fix_g.responses.append(res)
 
-                # apply changes
                 file.apply_changes(changes[file_path])
 
             evo.fix_records = fix_records
@@ -694,11 +624,13 @@ class CIEvoStr(EvolvingStrategy):
 
 
 class CIEvoAgent(EvoAgent):
+    """CI演进代理"""
     def __init__(self, evolving_strategy: CIEvoStr) -> None:
         super().__init__(max_loop=1, evolving_strategy=evolving_strategy)
         self.evolving_trace = []
 
     def multistep_evolve(self, evo: Repo, eva: Evaluator) -> Repo:
+        """多步演进"""
         evo = self.evolving_strategy.evolve(
             evo=evo,
             evolving_trace=self.evolving_trace,
@@ -711,12 +643,11 @@ class CIEvoAgent(EvoAgent):
 
 DIR = None
 while DIR is None or not DIR.exists():
-    DIR = Prompt.ask("Please input the [cyan]project directory[/cyan]")
+    DIR = Prompt.ask("请输入 [cyan]项目目录[/cyan]")
     DIR = Path(DIR)
 
 excludes = Prompt.ask(
-    "Input the [dark_orange]excluded directories[/dark_orange] (relative to "
-    "[cyan]project path[/cyan] and separated by whitespace)",
+    "输入 [dark_orange]排除的目录[/dark_orange] (相对于 [cyan]项目路径[/cyan] 并用空格分隔)",
 ).split(" ")
 excludes = [Path(exclude.strip()) for exclude in excludes if exclude.strip() != ""]
 
@@ -724,13 +655,12 @@ start_time = time.time()
 start_timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%m%d%H%M")
 
 repo = Repo(DIR, excludes=excludes)
-# evaluator = MultiEvaluator(MypyEvaluator(), RuffEvaluator())
 evaluator = RuffEvaluator()
 estr = CIEvoStr()
 ea = CIEvoAgent(estr)
 ea.multistep_evolve(repo, evaluator)
 while True:
-    print(Rule(f"Round {len(ea.evolving_trace)} repair", style="blue"))
+    print(Rule(f"第 {len(ea.evolving_trace)} 轮修复", style="blue"))
     repo: Repo = ea.multistep_evolve(repo, evaluator)
 
     fix_records = repo.fix_records
@@ -738,7 +668,6 @@ while True:
     with Path(filename).open("w") as file:
         json.dump({k: v.to_dict() for k, v in fix_records.items()}, file, indent=4)
 
-    # Count the number of skipped errors
     skipped_errors_count = 0
     directly_fixed_errors_count = 0
     manually_fixed_errors_count = 0
@@ -770,48 +699,42 @@ while True:
     for code, count in sorted(manually_fixed_errors_code_count.items(), key=lambda x: x[1], reverse=True):
         manually_fixed_errors_statistics += f"{count: >5} {code: >10} {code_message[code]}\n"
 
-    # Create a table to display the counts and ratios
-    table = Table(title="Error Fix Statistics")
-    table.add_column("Type")
-    table.add_column("Statistics")
-    table.add_column("Count")
-    table.add_column("Ratio")
+    table = Table(title="错误修复统计")
+    table.add_column("类型")
+    table.add_column("统计")
+    table.add_column("数量")
+    table.add_column("比例")
 
     total_errors_count = skipped_errors_count + directly_fixed_errors_count + manually_fixed_errors_count
-    table.add_row("Total Errors", "", Text(str(total_errors_count), style="cyan"), "")
+    table.add_row("总错误数", "", Text(str(total_errors_count), style="cyan"), "")
     table.add_row(
-        Text("Skipped Errors", style="red"),
+        Text("跳过的错误", style="red"),
         skipped_errors_statistics,
         Text(str(skipped_errors_count), style="red"),
-        Text(f"{skipped_errors_count / total_errors_count:.2%}"),
+        Text(f"{skipped_errors_count / total_errors_count:.2%}" if total_errors_count else "0.00%"),
         style="red",
     )
     table.add_row(
-        Text("Directly Fixed Errors", style="green"),
+        Text("直接修复的错误", style="green"),
         directly_fixed_errors_statistics,
         Text(str(directly_fixed_errors_count), style="green"),
-        Text(f"{directly_fixed_errors_count / total_errors_count:.2%}"),
+        Text(f"{directly_fixed_errors_count / total_errors_count:.2%}" if total_errors_count else "0.00%"),
         style="green",
     )
     table.add_row(
-        Text("Manually Fixed Errors", style="yellow"),
+        Text("手动修复的错误", style="yellow"),
         manually_fixed_errors_statistics,
         Text(str(manually_fixed_errors_count), style="yellow"),
-        Text(f"{manually_fixed_errors_count / total_errors_count:.2%}"),
+        Text(f"{manually_fixed_errors_count / total_errors_count:.2%}" if total_errors_count else "0.00%"),
         style="yellow",
     )
 
     print(table)
-    operation = Prompt.ask("Start next round? (y/n)", choices=["y", "n"])
+    operation = Prompt.ask("开始下一轮？ (y/n)", choices=["y", "n"])
     if operation == "n":
         break
 
 
 end_time = time.time()
 execution_time = end_time - start_time
-print(f"Execution time: {execution_time} seconds")
-
-""" Please commit it by hand... and then run the next round
-git add -u
-git commit --no-verify  -v
-"""
+print(f"执行时间: {execution_time} 秒")

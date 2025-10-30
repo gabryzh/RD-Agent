@@ -4,30 +4,32 @@ from typing import Optional
 
 from rdagent.core.conf import ExtendedBaseSettings
 
+# 定义当前目录
 DIRNAME = Path("./")
 
 
 class BenchmarkSettings(ExtendedBaseSettings):
+    """基准测试设置类"""
     class Config:
         env_prefix = "BENCHMARK_"
-        """Use `BENCHMARK_` as prefix for environment variables"""
+        """使用 `BENCHMARK_` 作为环境变量的前缀"""
 
     bench_data_path: Path = DIRNAME / "example.json"
-    """data for benchmark"""
+    """基准测试数据路径"""
 
     bench_test_round: int = 10
-    """how many rounds to run, each round may cost 10 minutes"""
+    """要运行的回合数，每回合可能花费10分钟"""
 
     bench_test_case_n: Optional[int] = None
-    """how many test cases to run; If not given, all test cases will be run"""
+    """要运行的测试用例数；如果未给出，将运行所有测试用例"""
 
     bench_method_cls: str = "rdagent.components.coder.factor_coder.FactorCoSTEER"
-    """method to be used for test cases"""
+    """用于测试用例的方法"""
 
     bench_method_extra_kwargs: dict = field(
         default_factory=dict,
     )
-    """extra kwargs for the method to be tested except the task list"""
+    """要测试的方法的额外关键字参数（任务列表除外）"""
 
     bench_result_path: Path = DIRNAME / "result"
-    """result save path"""
+    """结果保存路径"""

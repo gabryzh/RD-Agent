@@ -9,12 +9,13 @@ from rdagent.utils.agent.tpl import T
 
 
 class DSFinetuneScen(DataScienceScen):
-    """DSFinetuneScen Scenario"""
+    """数据科学微调场景"""
 
     def _get_data_folder_description(self) -> str:
+        """获取数据文件夹的描述"""
         folder_desc = describe_data_folder_v2(
             Path(DS_RD_SETTING.local_data_path) / self.competition,
             show_nan_columns=DS_RD_SETTING.show_nan_columns,
-            max_length=20000,  # more context for model script
+            max_length=20000,  # 为模型脚本提供更多上下文
         )
         return folder_desc

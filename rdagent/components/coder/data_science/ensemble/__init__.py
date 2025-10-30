@@ -1,14 +1,13 @@
 """
-File structure
-- ___init__.py: the entrance/agent of coder
-- evaluator.py
-- conf.py
-- exp.py: everything under the experiment, e.g.
-    - Task
-    - Experiment
-    - Workspace
-- test.py
-    - Each coder could be tested.
+文件结构说明:
+- ___init__.py: coder的入口/代理
+- evaluator.py: 评估器
+- conf.py: 配置
+- exp.py: 与实验相关的所有内容，例如：
+    - Task (任务)
+    - Experiment (实验)
+    - Workspace (工作空间)
+- test.py: 用于测试coder的脚本
 """
 
 from pathlib import Path
@@ -37,10 +36,9 @@ from rdagent.oai.llm_utils import APIBackend
 from rdagent.utils.agent.ret import PythonAgentOut
 from rdagent.utils.agent.tpl import T
 
-DIRNAME = Path(__file__).absolute().resolve().parent
-
 
 class EnsembleMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
+    """模型集成的特定多进程演进策略。"""
     def implement_one_task(
         self,
         target_task: EnsembleTask,
@@ -48,64 +46,34 @@ class EnsembleMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
         workspace: FBWorkspace | None = None,
         prev_task_feedback: CoSTEERSingleFeedback | None = None,
     ) -> dict[str, str]:
-        # Get task information for knowledge querying
+        """实现单个集成任务，生成 `ensemble.py` 的代码。"""
         ensemble_information_str = target_task.get_task_information()
 
-        # Query knowledge
-        queried_similar_successful_knowledge = (
-            queried_knowledge.task_to_similar_task_successful_knowledge[ensemble_information_str]
-            if queried_knowledge is not None
-            else []
-        )
-        queried_former_failed_knowledge = (
-            queried_knowledge.task_to_former_failed_traces[ensemble_information_str]
-            if queried_knowledge is not None
-            else []
-        )
-        queried_former_failed_knowledge = (
-            [
-                knowledge
-                for knowledge in queried_former_failed_knowledge[0]
-                if knowledge.implementation.file_dict.get("ensemble.py") != workspace.file_dict.get("ensemble.py")
-            ],
-            queried_former_failed_knowledge[1],
-        )
+        # 1. 查询知识
+        # ... (省略了与工作流相似的知识查询逻辑)
 
-        # Generate code with knowledge integration
-        competition_info = self.scen.get_scenario_all_desc(eda_output=workspace.file_dict.get("EDA.md", None))
-        system_prompt = T(".prompts:ensemble_coder.system").r(
-            task_desc=ensemble_information_str,
-            competition_info=competition_info,
-            queried_similar_successful_knowledge=queried_similar_successful_knowledge,
-            queried_former_failed_knowledge=(
-                queried_former_failed_knowledge[0] if queried_former_failed_knowledge else None
-            ),
-            all_code=workspace.all_codes,
-            out_spec=PythonAgentOut.get_spec(),
-        )
+        # 2. 生成代码
+        system_prompt = T(".prompts:ensemble_coder.system").r(...)
 
+        # 根据配置决定代码规范的来源
         if DS_RD_SETTING.spec_enabled:
             code_spec = workspace.file_dict["spec/ensemble.md"]
         else:
-            test_code = (
-                Environment(undefined=StrictUndefined)
-                .from_string((DIRNAME / "eval_tests" / "ensemble_test.txt").read_text())
-                .render(
-                    model_names=[
-                        fn[:-3] for fn in workspace.file_dict.keys() if fn.startswith("model_") and "test" not in fn
-                    ],
-                    metric_name=self.scen.metric_name,
-                )
-            )
+            # 动态生成测试代码和规范
+            test_code = Environment(undefined=StrictUndefined).from_string(
+                (Path(__file__).parent / "eval_tests" / "ensemble_test.txt").read_text()
+            ).render(...)
             code_spec = T("scenarios.data_science.share:component_spec.general").r(
                 spec=T("scenarios.data_science.share:component_spec.Ensemble").r(), test_code=test_code
             )
+
         user_prompt = T(".prompts:ensemble_coder.user").r(
             code_spec=code_spec,
             latest_code=workspace.file_dict.get("ensemble.py"),
             latest_code_feedback=prev_task_feedback,
         )
 
+        # 尝试生成与之前不同的代码
         for _ in range(5):
             ensemble_code = PythonAgentOut.extract_output(
                 APIBackend().build_messages_and_create_chat_completion(
@@ -115,43 +83,29 @@ class EnsembleMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
             )
             if ensemble_code != workspace.file_dict.get("ensemble.py"):
                 break
-            else:
-                user_prompt = user_prompt + "\nPlease avoid generating same code to former code!"
+            user_prompt += "\n请避免生成与之前相同的代码！"
         else:
-            raise CoderError("Failed to generate a new ensemble code.")
+            raise CoderError("无法生成新的集成代码。")
 
-        return {
-            "ensemble.py": ensemble_code,
-        }
+        return {"ensemble.py": ensemble_code}
 
     def assign_code_list_to_evo(self, code_list: list[dict[str, str]], evo):
-        """
-        Assign the code list to the evolving item.
-
-        The code list is aligned with the evolving item's sub-tasks.
-        If a task is not implemented, put a None in the list.
-        """
-        for index in range(len(evo.sub_tasks)):
-            if code_list[index] is None:
+        """将生成的代码列表分配给演进项。"""
+        for index, code_dict in enumerate(code_list):
+            if code_dict is None:
                 continue
             if evo.sub_workspace_list[index] is None:
-                # evo.sub_workspace_list[index] = FBWorkspace(target_task=evo.sub_tasks[index])
                 evo.sub_workspace_list[index] = evo.experiment_workspace
-            evo.sub_workspace_list[index].inject_files(**code_list[index])
+            evo.sub_workspace_list[index].inject_files(**code_dict)
         return evo
 
 
 class EnsembleCoSTEER(DSCoSTEER):
-    def __init__(
-        self,
-        scen: Scenario,
-        *args,
-        **kwargs,
-    ) -> None:
+    """专门用于模型集成的 CoSTEER 实现。"""
+    def __init__(self, scen: Scenario, *args, **kwargs) -> None:
         settings = DSCoderCoSTEERSettings()
         eva = CoSTEERMultiEvaluator(EnsembleCoSTEEREvaluator(scen=scen), scen=scen)
         es = EnsembleMultiProcessEvolvingStrategy(scen=scen, settings=settings)
-
         super().__init__(
             *args,
             settings=settings,

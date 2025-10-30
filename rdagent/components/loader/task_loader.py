@@ -8,66 +8,53 @@ from rdagent.core.experiment import Loader, WsLoader
 
 
 class FactorTaskLoader(Loader[FactorTask]):
+    """
+    因子任务加载器。
+    继承自通用的 Loader 类，专门用于加载 `FactorTask` 类型的任务。
+    """
     pass
 
 
 class ModelTaskLoader(Loader[ModelTask]):
+    """
+    模型任务加载器。
+    继承自通用的 Loader 类，专门用于加载 `ModelTask` 类型的任务。
+    """
     pass
 
 
 class ModelTaskLoaderJson(ModelTaskLoader):
-    # def __init__(self, json_uri: str, select_model: Optional[str] = None) -> None:
-    #     super().__init__()
-    #     self.json_uri = json_uri
-    #     self.select_model = 'A-DGN'
-
-    # def load(self, *argT, **kwargs) -> Sequence[ModelImplTask]:
-    #     # json is supposed to be in the format of {model_name: dict{model_data}}
-    #     model_dict = json.load(open(self.json_uri, "r"))
-    #     if self.select_model is not None:
-    #         assert self.select_model in model_dict
-    #         model_name = self.select_model
-    #         model_data = model_dict[self.select_model]
-    #     else:
-    #         model_name, model_data = list(model_dict.items())[0]
-
-    #     model_impl_task = ModelImplTask(
-    #         name=model_name,
-    #         description=model_data["description"],
-    #         formulation=model_data["formulation"],
-    #         variables=model_data["variables"],
-    #         key=model_name
-    #     )
-
-    #     return [model_impl_task]
-
+    """
+    从 JSON 文件加载模型任务的具体实现。
+    """
     def __init__(self, json_uri: str) -> None:
+        """
+        初始化加载器。
+
+        Args:
+            json_uri (str): 包含模型任务定义的 JSON 文件的路径。
+        """
         super().__init__()
         self.json_uri = json_uri
 
     def load(self, *argT, **kwargs) -> Sequence[ModelTask]:
-        # json is supposed to be in the format of {model_name: dict{model_data}}
-        model_dict = json.load(open(self.json_uri, "r"))
-        # FIXME: the model in the json file is not right due to extraction error
-        #       We should fix them case by case in the future
-        #
-        # formula_info = {
-        #     "name": "Anti-Symmetric Deep Graph Network (A-DGN)",
-        #     "description": "A framework for stable and non-dissipative DGN design. It ensures long-range information preservation between nodes and prevents gradient vanishing or explosion during training.",
-        #     "formulation": r"\mathbf{x}^{\prime}_i = \mathbf{x}_i + \epsilon \cdot \sigma \left( (\mathbf{W}-\mathbf{W}^T-\gamma \mathbf{I}) \mathbf{x}_i + \Phi(\mathbf{X}, \mathcal{N}_i) + \mathbf{b}\right),",
-        #     "variables": {
-        #         r"\mathbf{x}_i": "The state of node i at previous layer",
-        #         r"\epsilon": "The step size in the Euler discretization",
-        #         r"\sigma": "A monotonically non-decreasing activation function",
-        #         r"\Phi": "A graph convolutional operator",
-        #         r"W": "An anti-symmetric weight matrix",
-        #         r"\mathbf{x}^{\prime}_i": "The node feature matrix at layer l-1",
-        #         r"\mathcal{N}_i": "The set of neighbors of node u",
-        #         r"\mathbf{b}": "A bias vector",
-        #     },
-        #     "key": "A-DGN",
-        # }
+        """
+        从 JSON 文件加载一个或多个模型任务。
+
+        JSON 文件格式应为 {model_name: {model_data}}。
+
+        Returns:
+            Sequence[ModelTask]: 加载的模型任务对象列表。
+        """
+        # 从 JSON 文件加载模型字典
+        with open(self.json_uri, "r") as f:
+            model_dict = json.load(f)
+
+        # FIXME: 由于提取错误，json 文件中的模型信息可能不正确。
+        #        未来需要逐个修复这些问题。
+
         model_impl_task_list = []
+        # 遍历字典中的每个模型，创建 ModelTask 对象
         for model_name, model_data in model_dict.items():
             model_impl_task = ModelTask(
                 name=model_name,
@@ -75,22 +62,46 @@ class ModelTaskLoaderJson(ModelTaskLoader):
                 formulation=model_data["formulation"],
                 variables=model_data["variables"],
                 model_type=model_data["model_type"],
-                architecture="",
-                hyperparameters="",
+                architecture="",  # 默认为空字符串
+                hyperparameters="",  # 默认为空字符串
             )
             model_impl_task_list.append(model_impl_task)
         return model_impl_task_list
 
 
 class ModelWsLoader(WsLoader[ModelTask, ModelFBWorkspace]):
+    """
+    模型工作空间加载器。
+    用于从给定路径加载与特定模型任务相关的代码，并注入到工作空间中。
+    """
     def __init__(self, path: Path) -> None:
+        """
+        初始化加载器。
+
+        Args:
+            path (Path): 存放模型代码文件的目录路径。
+        """
         self.path = Path(path)
 
     def load(self, task: ModelTask) -> ModelFBWorkspace:
-        assert task.name is not None
+        """
+        为给定的模型任务加载代码并准备工作空间。
+
+        Args:
+            task (ModelTask): 目标模型任务。
+
+        Returns:
+            ModelFBWorkspace: 准备好并注入了代码的工作空间。
+        """
+        assert task.name is not None, "任务名称不能为空"
+        # 创建与任务关联的工作空间
         mti = ModelFBWorkspace(task)
+        # 准备工作空间（例如，创建目录结构）
         mti.prepare()
-        with open(self.path / f"{task.name}.py", "r") as f:
+        # 读取与任务同名的 .py 文件
+        code_file = self.path / f"{task.name}.py"
+        with open(code_file, "r") as f:
             code = f.read()
+        # 将读取的代码注入到工作空间的 'model.py' 文件中
         mti.inject_files(**{"model.py": code})
         return mti

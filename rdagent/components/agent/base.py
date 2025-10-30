@@ -10,17 +10,22 @@ from rdagent.oai.backend.pydantic_ai import get_agent_model
 
 
 class BaseAgent:
+    """代理的基类，定义了代理应具备的基本接口。"""
 
     @abstractmethod
-    def __init__(self, system_prompt: str, toolsets: list[str]): ...
+    def __init__(self, system_prompt: str, toolsets: list[str]):
+        """初始化代理。"""
+        ...
 
     @abstractmethod
-    def query(self, query: str) -> str: ...
+    def query(self, query: str) -> str:
+        """执行查询并返回结果。"""
+        ...
 
 
 class PAIAgent(BaseAgent):
     """
-    Pydantic-AI agent with optional Prefect caching support
+    Pydantic-AI 代理，支持可选的 Prefect 缓存功能。
     """
 
     agent: Agent
@@ -33,45 +38,47 @@ class PAIAgent(BaseAgent):
         enable_cache: bool = False,
     ):
         """
-        Initialize Pydantic-AI agent
+        初始化 Pydantic-AI 代理。
 
-        Parameters
+        参数
         ----------
         system_prompt : str
-            System prompt for the agent
+            代理的系统提示。
         toolsets : list[str | MCPServerStreamableHTTP]
-            List of MCP server URLs or instances
+            MCP 服务器 URL 或实例的列表。
         enable_cache : bool
-            Enable persistent caching via Prefect. Requires Prefect server:
-            `prefect server start` then set PREFECT_API_URL in environment
+            通过 Prefect 启用持久缓存。需要 Prefect 服务器：
+            `prefect server start` 然后在环境中设置 PREFECT_API_URL。
         """
         toolsets = [(ts if isinstance(ts, MCPServerStreamableHTTP) else MCPServerStreamableHTTP(ts)) for ts in toolsets]
         self.agent = Agent(get_agent_model(), system_prompt=system_prompt, toolsets=toolsets)
         self.enable_cache = enable_cache
 
-        # Create cached query function if caching is enabled
+        # 如果启用缓存，则创建带缓存的查询函数
         if enable_cache:
             self._cached_query = task(cache_policy=INPUTS, persist_result=True)(self._run_query)
 
     def _run_query(self, query: str) -> str:
         """
-        Internal query execution (no caching)
+        内部查询执行（无缓存）。
         """
-        nest_asyncio.apply()  # NOTE: very important. Because pydantic-ai uses asyncio!
+        nest_asyncio.apply()  # 注意：非常重要。因为 pydantic-ai 使用了 asyncio！
         result = self.agent.run_sync(query)
         return result.output
 
     def query(self, query: str) -> str:
         """
-        Run agent query with optional caching
+        运行带可选缓存的代理查询。
 
-        Parameters
+        参数
         ----------
         query : str
+            要执行的查询。
 
-        Returns
+        返回
         -------
         str
+            查询结果。
         """
         if self.enable_cache:
             return self._cached_query(query)

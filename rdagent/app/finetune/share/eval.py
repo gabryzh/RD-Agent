@@ -11,7 +11,7 @@ from rdagent.utils.agent.workflow import build_cls_from_json_with_retry
 
 
 class PrevModelLoadEvaluator(CoSTEEREvaluator):
-    """This evaluator checks whether the code actually loads a model from `prev_model`."""
+    """此评估器检查代码是否实际从`prev_model`加载模型。"""
 
     def __init__(self, scen: Scenario):
         super().__init__(scen)
@@ -19,18 +19,19 @@ class PrevModelLoadEvaluator(CoSTEEREvaluator):
     def evaluate(
         self, target_task: Task, implementation: FBWorkspace, gt_implementation: FBWorkspace, *args, **kwargs
     ) -> CoSTEERSingleFeedback:
+        """评估代码是否加载了先前训练的模型。"""
         data_source_path = T("scenarios.data_science.share:scen.input_path").r()
         prev_model_dir = Path(data_source_path) / "prev_model"
 
-        # 1) Inspect the code itself for references to prev_model loading
+        # 1) 检查代码本身是否引用了prev_model的加载
         code_str = implementation.file_dict["main.py"]
         code_contain_prev = "prev_model" in code_str
-        print(f"Code references prev_model: {code_contain_prev}")
+        print(f"代码引用了prev_model: {code_contain_prev}")
         if not code_contain_prev:
             err = (
-                "No evidence found that your code loads a model from `prev_model`. "
-                "Please check that you are calling the correct load function "
-                f"and pointing it to the `{prev_model_dir}` directory."
+                "未找到代码从`prev_model`加载模型的证据。"
+                "请检查您是否调用了正确的加载函数，"
+                f"并将其指向`{prev_model_dir}`目录。"
             )
             return CoSTEERSingleFeedback(
                 execution=err,

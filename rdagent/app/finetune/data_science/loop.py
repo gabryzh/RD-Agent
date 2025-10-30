@@ -15,22 +15,21 @@ def main(
     competition: str | None = None,
 ):
     """
-    Parameters
-    ----------
-    competition :
-        Competition name.
+    用于模型微调的自动研发演进循环。
 
-    Auto R&D Evolving loop for models finetune.
-    You can continue running a session by using the command:
+    参数：
+        competition (str): 竞赛名称。
+
+    您可以使用以下命令继续运行一个会话：
     .. code-block:: bash
         dotenv run -- python rdagent/app/finetune/data_science/loop.py --competition aerial-cactus-identification
     """
     if not competition:
-        raise Exception("Please specify competition name.")
+        raise Exception("请指定竞赛名称。")
 
     model_folder = Path(DS_RD_SETTING.local_data_path) / competition / "prev_model"
     if not model_folder.exists():
-        raise Exception(f"Please put the model path to {model_folder}.")
+        raise Exception(f"请将模型路径放置在 {model_folder}。")
     update_settings(competition)
     rd_loop: DataScienceRDLoop = DataScienceRDLoop(DS_RD_SETTING)
     asyncio.run(rd_loop.run())

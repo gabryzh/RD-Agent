@@ -27,35 +27,38 @@ from rdagent.scenarios.kaggle.proposal.proposal import KGTrace
 
 
 class KaggleRDLoop(RDLoop):
+    """Kaggle竞赛的自动研发循环"""
     def __init__(self, PROP_SETTING: BasePropSetting):
+        """初始化Kaggle研发循环"""
         scen: Scenario = import_class(PROP_SETTING.scen)(PROP_SETTING.competition)
-        logger.log_object(scen, tag="scenario")
+        logger.log_object(scen, tag="场景")
         knowledge_base = (
             import_class(PROP_SETTING.knowledge_base)(PROP_SETTING.knowledge_base_path, scen)
             if PROP_SETTING.knowledge_base != ""
             else None
         )
-        logger.log_object(knowledge_base, tag="knowledge_base")
+        logger.log_object(knowledge_base, tag="知识库")
         self.hypothesis_gen: HypothesisGen = import_class(PROP_SETTING.hypothesis_gen)(scen)
-        logger.log_object(self.hypothesis_gen, tag="hypothesis generator")
+        logger.log_object(self.hypothesis_gen, tag="假设生成器")
         self.hypothesis2experiment: Hypothesis2Experiment = import_class(PROP_SETTING.hypothesis2experiment)()
-        logger.log_object(self.hypothesis2experiment, tag="hypothesis2experiment")
+        logger.log_object(self.hypothesis2experiment, tag="假设到实验")
         self.feature_coder: Developer = import_class(PROP_SETTING.feature_coder)(scen)
-        logger.log_object(self.feature_coder, tag="feature coder")
+        logger.log_object(self.feature_coder, tag="特征编码器")
         self.model_feature_selection_coder: Developer = import_class(PROP_SETTING.model_feature_selection_coder)(scen)
-        logger.log_object(self.model_feature_selection_coder, tag="model feature selection coder")
+        logger.log_object(self.model_feature_selection_coder, tag="模型特征选择编码器")
         self.model_coder: Developer = import_class(PROP_SETTING.model_coder)(scen)
-        logger.log_object(self.model_coder, tag="model coder")
+        logger.log_object(self.model_coder, tag="模型编码器")
         self.feature_runner: Developer = import_class(PROP_SETTING.feature_runner)(scen)
-        logger.log_object(self.feature_runner, tag="feature runner")
+        logger.log_object(self.feature_runner, tag="特征运行器")
         self.model_runner: Developer = import_class(PROP_SETTING.model_runner)(scen)
-        logger.log_object(self.model_runner, tag="model runner")
+        logger.log_object(self.model_runner, tag="模型运行器")
         self.summarizer: Experiment2Feedback = import_class(PROP_SETTING.summarizer)(scen)
-        logger.log_object(self.summarizer, tag="summarizer")
+        logger.log_object(self.summarizer, tag="摘要器")
         self.trace = KGTrace(scen=scen, knowledge_base=knowledge_base)
         super(RDLoop, self).__init__()
 
     def coding(self, prev_out: dict[str, Any]):
+        """编码阶段"""
         if prev_out["direct_exp_gen"]["propose"].action in [
             KG_ACTION_FEATURE_ENGINEERING,
             KG_ACTION_FEATURE_PROCESSING,
@@ -65,10 +68,11 @@ class KaggleRDLoop(RDLoop):
             exp = self.model_feature_selection_coder.develop(prev_out["direct_exp_gen"]["exp_gen"])
         else:
             exp = self.model_coder.develop(prev_out["direct_exp_gen"]["exp_gen"])
-        logger.log_object(exp.sub_workspace_list, tag="coder result")
+        logger.log_object(exp.sub_workspace_list, tag="编码器结果")
         return exp
 
     def running(self, prev_out: dict[str, Any]):
+        """运行阶段"""
         if prev_out["direct_exp_gen"]["propose"].action in [
             KG_ACTION_FEATURE_ENGINEERING,
             KG_ACTION_FEATURE_PROCESSING,
@@ -76,7 +80,7 @@ class KaggleRDLoop(RDLoop):
             exp = self.feature_runner.develop(prev_out["coding"])
         else:
             exp = self.model_runner.develop(prev_out["coding"])
-        logger.log_object(exp, tag="runner result")
+        logger.log_object(exp, tag="运行器结果")
         if KAGGLE_IMPLEMENT_SETTING.competition in [
             "optiver-realized-volatility-prediction",
             "covid19-global-forecasting-week-1",
@@ -84,7 +88,7 @@ class KaggleRDLoop(RDLoop):
             try:
                 python_files_to_notebook(KAGGLE_IMPLEMENT_SETTING.competition, exp.experiment_workspace.workspace_path)
             except Exception as e:
-                logger.error(f"Merge python files to one file failed: {e}")
+                logger.error(f"合并python文件到一个文件失败: {e}")
         if KAGGLE_IMPLEMENT_SETTING.auto_submit:
             csv_path = exp.experiment_workspace.workspace_path / "submission.csv"
             try:
@@ -102,9 +106,9 @@ class KaggleRDLoop(RDLoop):
                     check=True,
                 )
             except subprocess.CalledProcessError as e:
-                logger.error(f"Auto submission failed: \n{e}")
+                logger.error(f"自动提交失败: \n{e}")
             except Exception as e:
-                logger.error(f"Other exception when use kaggle api:\n{e}")
+                logger.error(f"使用kaggle api时发生其他异常:\n{e}")
 
         return exp
 
@@ -113,11 +117,11 @@ class KaggleRDLoop(RDLoop):
 
 def main(path=None, step_n=None, competition=None):
     """
-    Auto R&D Evolving loop for models in a kaggle{} scenario.
-    You can continue running session by
+    Kaggle场景中模型的自动研发演进循环。
+    您可以通过以下方式继续运行会话：
     .. code-block:: bash
-        dotenv run -- python rdagent/app/kaggle/loop.py [--competition titanic] $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` is a optional parameter
-        rdagent kaggle --competition playground-series-s4e8  # You are encouraged to use this one.
+        dotenv run -- python rdagent/app/kaggle/loop.py [--competition titanic] $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` 是可选参数
+        rdagent kaggle --competition playground-series-s4e8  # 推荐使用此命令
     """
     if competition:
         KAGGLE_IMPLEMENT_SETTING.competition = competition
@@ -127,7 +131,7 @@ def main(path=None, step_n=None, competition=None):
                 "rdagent.scenarios.kaggle.knowledge_management.graph.KGKnowledgeGraph"
             )
     else:
-        logger.error("Please specify competition name.")
+        logger.error("请指定竞赛名称。")
     if path is None:
         kaggle_loop = KaggleRDLoop(KAGGLE_IMPLEMENT_SETTING)
     else:

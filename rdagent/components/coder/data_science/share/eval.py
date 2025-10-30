@@ -1,3 +1,4 @@
+# 导入必要的库和模块
 import re
 from pathlib import Path
 from typing import Literal
@@ -17,30 +18,47 @@ from rdagent.core.scenario import Scenario
 from rdagent.utils.agent.tpl import T
 from rdagent.utils.agent.workflow import build_cls_from_json_with_retry
 
+# 获取当前文件所在的目录路径
 DIRNAME = Path(__file__).absolute().resolve().parent
 
+# 定义反馈类的别名
 PipelineSingleFeedback = CoSTEERSingleFeedback
 PipelineMultiFeedback = CoSTEERMultiFeedback
 
-NO_SUB = "<No submission.csv file found.>"
-NO_SCORE = "<No scores.csv file found.>"
+# 定义未找到文件时的占位符
+NO_SUB = "<未找到 submission.csv 文件>"
+NO_SCORE = "<未找到 scores.csv 文件>"
 
 
 class ModelDumpEvaluator(CoSTEEREvaluator):
-    """This evaluator assumes that it runs after the model"""
+    """
+    模型转储评估器。
+    这个评估器假设它在模型训练和预测之后运行，用于验证模型是否被正确保存（转储），
+    并且可以在不重新训练的情况下被加载并用于推理。
+    """
 
     def __init__(self, scen: Scenario, data_type: Literal["sample", "full"]):
+        """
+        初始化评估器。
+
+        参数:
+            scen (Scenario): 当前的场景实例。
+            data_type (Literal["sample", "full"]): 使用的数据类型，"sample"表示调试用的采样数据，"full"表示完整数据。
+        """
         super().__init__(scen)
         self.data_type = data_type
 
     def evaluate(
         self, target_task: Task, implementation: FBWorkspace, gt_implementation: FBWorkspace, *kargs, **kwargs
     ) -> CoSTEERSingleFeedback:
+        """
+        执行评估。
+        """
 
         model_folder = implementation.workspace_path / "models"
-        # 1) Check if the model_folder is not empty
+        # 1) 检查模型文件夹是否不为空
         if not model_folder.exists() or not any(model_folder.iterdir()):
-            err_msg = "Model folder (`models` sub folder) is empty or does not exist. The model is not dumped."
+            err_msg = "模型文件夹（`models`子文件夹）为空或不存在。模型未被转储。"
             return CoSTEERSingleFeedback(
                 execution=err_msg,
                 return_checking=err_msg,
@@ -48,6 +66,7 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
                 final_decision=False,
             )
 
+        # 根据数据类型设置数据源路径和环境
         data_source_path = (
             f"{DS_RD_SETTING.local_data_path}/{self.scen.competition}"
             if self.data_type == "full"
@@ -60,9 +79,9 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
             ),
         )
 
-        # 2) check the result and stdout after reruning the model.
+        # 2) 检查重新运行模型后的结果和标准输出。
 
-        # Read the content of files submission.csv and scores.csv before execution
+        # 执行前读取 submission.csv 和 scores.csv 的内容
         submission_content_before = (
             (implementation.workspace_path / "submission.csv").read_text()
             if (implementation.workspace_path / "submission.csv").exists()
@@ -74,24 +93,25 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
             else NO_SCORE
         )
 
-        # Remove the files submission.csv and scores.csv
+        # 删除 submission.csv 和 scores.csv 文件
         implementation.execute(env=env, entry=get_clear_ws_cmd(stage="before_inference"))
 
-        # Execute the main script
+        # 执行主脚本的推理模式
         stdout = remove_eda_part(
             implementation.execute(env=env, entry="strace -e trace=file -f -o trace.log python main.py --inference")
         )
 
-        # walk model_folder and list the files
+        # 遍历模型文件夹并列出文件
         model_folder_files = [
             str(file.relative_to(implementation.workspace_path)) for file in model_folder.iterdir() if file.is_file()
         ]
 
+        # 使用 strace 追踪文件打开操作，检查模型是否从数据源加载数据
         opened_trace_lines = None
         if (implementation.workspace_path / "trace.log").exists():
             input_path = T("scenarios.data_science.share:scen.input_path").r()
             abs_input_path = str(Path(input_path).resolve())
-            # matching path in string like `openat(AT_FDCWD, "/home/user/project/main.py", O_RDONLY) = 5`
+            # 匹配类似 `openat(AT_FDCWD, "/home/user/project/main.py", O_RDONLY) = 5` 的路径字符串
             path_regex = re.compile(r'openat\(.+?,\s*"([^"]+)"')
             log_content = (implementation.workspace_path / "trace.log").read_text()
 
@@ -108,14 +128,14 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
 
             from rdagent.scenarios.data_science.scen.utils import FileTreeGenerator
 
-            tree_gen = FileTreeGenerator(allowed_paths=opened_files)  # pass opened files filter
+            tree_gen = FileTreeGenerator(allowed_paths=opened_files)  # 传入打开的文件过滤器
             opened_trace_lines = tree_gen.generate_tree(Path(data_source_path).resolve())
-            # Limitation: training and test are expected to be different files.
+            # 限制：期望训练和测试是不同的文件。
 
-        # this will assert the generation of necessary files
+        # 断言必要的文件已生成
         for f in ["submission.csv", "scores.csv"]:
             if not (implementation.workspace_path / f).exists():
-                err_msg = f"{f} does not exist. The model is not dumped. Make sure that the required files, like submission.csv and scores.csv, are created even if you bypass the model training step by loading the saved model file directly."
+                err_msg = f"{f} 不存在。模型未被转储。请确保即使通过直接加载已保存的模型文件绕过模型训练步骤，也创建了所需的文件，如 submission.csv 和 scores.csv。"
                 return CoSTEERSingleFeedback(
                     execution=err_msg,
                     return_checking=err_msg,
@@ -123,11 +143,11 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
                     final_decision=False,
                 )
 
-        # Check if scores contain NaN (values)
+        # 检查分数是否包含 NaN (值)
         score_df = pd.read_csv((implementation.workspace_path / "scores.csv"), index_col=0)
         if score_df.isnull().values.any():
             nan_locations = score_df[score_df.isnull().any(axis=1)]
-            err_msg = f"\n[Error] The scores dataframe contains NaN values at the following locations:\n{nan_locations}"
+            err_msg = f"\n[错误] 分数数据帧在以下位置包含 NaN 值：\n{nan_locations}"
             return CoSTEERSingleFeedback(
                 execution=err_msg,
                 return_checking=err_msg,
@@ -135,6 +155,7 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
                 final_decision=False,
             )
 
+        # 执行后再次读取 submission.csv 和 scores.csv 的内容
         submission_content_after = (
             (implementation.workspace_path / "submission.csv").read_text()
             if (implementation.workspace_path / "submission.csv").exists()
@@ -146,6 +167,7 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
             else NO_SCORE
         )
 
+        # 构建发送给大语言模型的提示
         system_prompt = T(".prompts:dump_model_eval.system").r()
         user_prompt = T(".prompts:dump_model_eval.user").r(
             stdout=stdout.strip(),
@@ -156,21 +178,20 @@ class ModelDumpEvaluator(CoSTEEREvaluator):
             opened_trace_lines=opened_trace_lines,
         )
 
+        # 使用大语言模型生成反馈
         csfb = build_cls_from_json_with_retry(
             CoSTEERSingleFeedback,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
         )
 
+        # 如果检查级别为 "high"，则进行严格的内容比对
         if DS_RD_SETTING.model_dump_check_level == "high":
-            # Read the content of files submission.csv and scores.csv after execution
-            # Check if the content has changed
-            # excactly same checking. But it will take more user's time
+            # 检查执行前后文件内容是否发生变化
             if scores_content_before != scores_content_after:
-                return_msg = "\n[Error] The content of scores.csv has changed. Please check the code to ensure that the model is dumped correctly, and rerun the code to use the model directly without retraining it."
-                return_msg += f"\nBefore:\n{scores_content_before}\nAfter:\n{scores_content_after}"
+                return_msg = "\n[错误] scores.csv 的内容已更改。请检查代码以确保模型已正确转储，并重新运行代码以直接使用模型而不重新训练它。"
+                return_msg += f"\n之前:\n{scores_content_before}\n之后:\n{scores_content_after}"
                 if submission_content_before != submission_content_after:
-                    # If the scores file changes, display the two contents and append it into the return_checking
-                    return_msg = "[Error] The content of submission.csv has changed. Please check the code to ensure that the model is dumped correctly, and rerun the code to use the model directly without retraining it."
+                    return_msg = "[错误] submission.csv 的内容已更改。请检查代码以确保模型已正确转储，并重新运行代码以直接使用模型而不重新训练它。"
                 csfb.return_checking = (csfb.return_checking or "") + return_msg
         return csfb

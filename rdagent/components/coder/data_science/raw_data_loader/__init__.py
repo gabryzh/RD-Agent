@@ -1,30 +1,31 @@
 """
 
-Loop should not large change exclude
-- Action Choice[current data loader & spec]
-- other should share
-    - Propose[choice] => Task[Choice] => CoSTEER =>
+循环不应有大的变化，排除
+- 行动选择[当前数据加载器和规范]
+- 其他应共享
+    - 提议[选择] => 任务[选择] => CoSTEER =>
         -
 
-Extra feature:
-- cache
+额外特性:
+- 缓存
 
 
-File structure
-- ___init__.py: the entrance/agent of coder
+文件结构
+- ___init__.py: coder的入口/代理
 - evaluator.py
 - conf.py
-- exp.py: everything under the experiment, e.g.
-    - Task
-    - Experiment
-    - Workspace
+- exp.py: 实验下的所有内容，例如
+    - 任务
+    - 实验
+    - 工作空间
 - test.py
-    - Each coder could be tested.
+    - 每个coder都可以被测试。
 """
 
 import re
 from pathlib import Path
 
+# 导入 rdagent 内部模块
 from rdagent.app.data_science.conf import DS_RD_SETTING
 from rdagent.components.coder.CoSTEER.evaluators import (
     CoSTEERMultiEvaluator,
@@ -52,10 +53,15 @@ from rdagent.oai.llm_utils import APIBackend
 from rdagent.utils.agent.ret import PythonAgentOut
 from rdagent.utils.agent.tpl import T
 
+# 获取当前文件所在的目录路径
 DIRNAME = Path(__file__).absolute().resolve().parent
 
 
 class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
+    """
+    数据加载器多进程演进策略。
+    这个类实现了使用多进程方式来演进和实现数据加载器代码的逻辑。
+    """
     def implement_one_task(
         self,
         target_task: DataLoaderTask,
@@ -63,22 +69,29 @@ class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
         workspace: FBWorkspace | None = None,
         prev_task_feedback: CoSTEERSingleFeedback | None = None,
     ) -> dict[str, str]:
-        # return a workspace with "load_data.py", "spec/load_data.md" inside
-        # assign the implemented code to the new workspace.
+        """
+        实现单个数据加载器任务。
+        该方法的核心是生成代码规范、查询知识库、调用大语言模型生成代码，最终返回包含代码和规范文件的工作空间。
+        """
+        # 返回一个包含 "load_data.py", "spec/load_data.md" 的工作空间
+        # 将实现的代码分配给新的工作空间。
         competition_info = self.scen.get_scenario_all_desc(eda_output=workspace.file_dict.get("EDA.md", None))
         data_folder_info = self.scen.processed_data_folder_description
         data_loader_task_info = target_task.get_task_information()
 
+        # 查询相似的成功案例知识
         queried_similar_successful_knowledge = (
             queried_knowledge.task_to_similar_task_successful_knowledge[data_loader_task_info]
             if queried_knowledge is not None
             else []
         )
+        # 查询之前的失败尝试
         queried_former_failed_knowledge = (
             queried_knowledge.task_to_former_failed_traces[data_loader_task_info]
             if queried_knowledge is not None
             else []
         )
+        # 过滤掉与当前工作空间中代码相同的失败尝试
         queried_former_failed_knowledge = (
             [
                 knowledge
@@ -88,10 +101,10 @@ class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
             queried_former_failed_knowledge[1],
         )
 
-        # 1. specifications
-        # TODO: We may move spec into a separated COSTEER task
+        # 1. 生成规范
+        # TODO: 我们可以将规范生成移至一个单独的 COSTEER 任务中
         if DS_RD_SETTING.spec_enabled:
-            if "spec/data_loader.md" not in workspace.file_dict:  # Only generate the spec once
+            if "spec/data_loader.md" not in workspace.file_dict:  # 只生成一次规范
                 system_prompt = T(".prompts:spec.system").r(
                     runtime_environment=self.scen.get_runtime_environment(),
                     task_desc=data_loader_task_info,
@@ -126,7 +139,7 @@ class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
                 ensemble_spec = workspace.file_dict["spec/ensemble.md"]
                 workflow_spec = workspace.file_dict["spec/workflow.md"]
 
-        # 2. code
+        # 2. 生成代码
         system_prompt = T(".prompts:data_loader_coder.system").r(
             task_desc=data_loader_task_info,
             queried_similar_successful_knowledge=queried_similar_successful_knowledge,
@@ -149,6 +162,7 @@ class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
             latest_code_feedback=prev_task_feedback,
         )
 
+        # 尝试最多5次来生成有效的代码
         for _ in range(5):
             data_loader_code = PythonAgentOut.extract_output(
                 APIBackend().build_messages_and_create_chat_completion(
@@ -159,9 +173,9 @@ class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
             if data_loader_code != workspace.file_dict.get("load_data.py"):
                 break
             else:
-                user_prompt = user_prompt + "\nPlease avoid generating same code to former code!"
+                user_prompt = user_prompt + "\n请避免生成与之前代码相同的代码！"
         else:
-            raise CoderError("Failed to generate a new data loader code.")
+            raise CoderError("生成新的数据加载器代码失败。")
 
         return (
             {
@@ -180,22 +194,26 @@ class DataLoaderMultiProcessEvolvingStrategy(MultiProcessEvolvingStrategy):
 
     def assign_code_list_to_evo(self, code_list: list[dict[str, str]], evo):
         """
-        Assign the code list to the evolving item.
+        将代码列表分配给演进项。
 
-        The code list is aligned with the evolving item's sub-tasks.
-        If a task is not implemented, put a None in the list.
+        代码列表与演进项的子任务对齐。
+        如果某个任务未实现，则在列表中放置一个 None。
         """
         for index in range(len(evo.sub_tasks)):
             if code_list[index] is None:
                 continue
             if evo.sub_workspace_list[index] is None:
-                # evo.sub_workspace_list[index] = FBWorkspace(target_task=evo.sub_tasks[index])
                 evo.sub_workspace_list[index] = evo.experiment_workspace
             evo.sub_workspace_list[index].inject_files(**code_list[index])
         return evo
 
 
 class DataLoaderCoSTEER(DSCoSTEER):
+    """
+    数据加载器 CoSTEER 类。
+    这个类使用 CoSTEER 框架来协调数据加载器的代码生成过程。
+    它负责初始化评估器（Evaluator）和演进策略（Evolving Strategy）。
+    """
     def __init__(
         self,
         scen: Scenario,
@@ -205,7 +223,7 @@ class DataLoaderCoSTEER(DSCoSTEER):
         settings = DSCoderCoSTEERSettings()
         eva = CoSTEERMultiEvaluator(
             DataLoaderCoSTEEREvaluator(scen=scen), scen=scen
-        )  # Please specify whether you agree running your eva in parallel or not
+        )  # 请指定您是否同意并行运行评估器
         es = DataLoaderMultiProcessEvolvingStrategy(scen=scen, settings=settings)
 
         super().__init__(
@@ -220,6 +238,10 @@ class DataLoaderCoSTEER(DSCoSTEER):
         )
 
     def develop(self, exp):
+        """
+        开发过程。
+        在父类开发过程的基础上，增加了执行数据加载器测试和提取EDA（探索性数据分析）输出的步骤。
+        """
         new_exp = super().develop(exp)
 
         env = get_ds_env(
@@ -237,6 +259,6 @@ class DataLoaderCoSTEER(DSCoSTEER):
         if eda_output is not None:
             new_exp.experiment_workspace.inject_files(**{"EDA.md": eda_output})
         else:
-            eda_output = "No EDA output."
+            eda_output = "无 EDA 输出。"
             new_exp.experiment_workspace.inject_files(**{"EDA.md": eda_output})
         return new_exp

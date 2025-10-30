@@ -14,7 +14,7 @@ from rdagent.utils.agent.tpl import T
 
 
 class FactorEvaluator:
-    """Although the init method is same to Evaluator, but we want to emphasize they are different"""
+    """因子评估器的基类。"""
 
     def __init__(self, scen=None) -> None:
         self.scen = scen
@@ -27,23 +27,23 @@ class FactorEvaluator:
         gt_implementation: Workspace,
         **kwargs,
     ) -> Tuple[str, object]:
-        """You can get the dataframe by
+        """
+        评估方法的抽象定义。
 
+        您可以通过以下方式获取DataFrame:
         .. code-block:: python
-
             _, gen_df = implementation.execute()
             _, gt_df = gt_implementation.execute()
 
-        Returns
-        -------
-        Tuple[str, object]
-            - str: the text-based description of the evaluation result
-            - object: a comparable metric (bool, integer, float ...) None for evaluator with only text-based result
-
+        Returns:
+            Tuple[str, object]:
+            - str: 评估结果的文本描述。
+            - object: 一个可比较的指标（布尔值、整数、浮点数等）。如果评估器只有文本结果，则为None。
         """
-        raise NotImplementedError("Please implement the `evaluator` method")
+        raise NotImplementedError("请实现 `evaluate` 方法")
 
-    def _get_df(self, gt_implementation: Workspace, implementation: Workspace):
+    def _get_df(self, gt_implementation: Workspace, implementation: Workspace) -> Tuple[pd.DataFrame | None, pd.DataFrame | None]:
+        """辅助方法，用于从工作空间执行并获取DataFrame。"""
         if gt_implementation is not None:
             _, gt_df = gt_implementation.execute()
             if isinstance(gt_df, pd.Series):
@@ -65,6 +65,7 @@ class FactorEvaluator:
 
 
 class FactorCodeEvaluator(FactorEvaluator):
+    """使用 LLM 评估因子代码的质量。"""
     def evaluate(
         self,
         target_task: FactorTask,
@@ -73,7 +74,7 @@ class FactorCodeEvaluator(FactorEvaluator):
         value_feedback: str = "",
         gt_implementation: Workspace = None,
         **kwargs,
-    ):
+    ) -> Tuple[str, None]:
         factor_information = target_task.get_task_information()
         code = implementation.all_codes
 
@@ -85,12 +86,13 @@ class FactorCodeEvaluator(FactorEvaluator):
                     simple_background=FACTOR_COSTEER_SETTINGS.simple_background,
                 )
                 if self.scen is not None
-                else "No scenario description."
+                else "没有场景描述。"
             )
         )
 
+        # 循环缩减执行反馈以避免prompt超长
         execution_feedback_to_render = execution_feedback
-        for _ in range(10):  # 10 times to split the content is enough
+        for _ in range(10):
             user_prompt = T(".prompts:evaluator_code_feedback_v1_user").r(
                 factor_information=factor_information,
                 code=code,
@@ -99,15 +101,13 @@ class FactorCodeEvaluator(FactorEvaluator):
                 gt_code=gt_implementation.code if gt_implementation else None,
             )
             if (
-                APIBackend().build_messages_and_calculate_token(
-                    user_prompt=user_prompt,
-                    system_prompt=system_prompt,
-                )
+                APIBackend().build_messages_and_calculate_token(user_prompt=user_prompt, system_prompt=system_prompt)
                 > APIBackend().chat_token_limit
             ):
                 execution_feedback_to_render = execution_feedback_to_render[len(execution_feedback_to_render) // 2 :]
             else:
                 break
+
         critic_response = APIBackend().build_messages_and_create_chat_completion(
             user_prompt=user_prompt,
             system_prompt=system_prompt,
@@ -118,77 +118,53 @@ class FactorCodeEvaluator(FactorEvaluator):
 
 
 class FactorInfEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """评估因子值中是否存在无穷大值。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, bool]:
         _, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                False,
-            )
-        INF_count = gen_df.isin([float("inf"), -float("inf")]).sum().sum()
-        if INF_count == 0:
-            return "The source dataframe does not have any infinite values.", True
+            return "源DataFrame为None。请检查实现。", False
+
+        inf_count = gen_df.isin([float("inf"), -float("inf")]).sum().sum()
+        if inf_count == 0:
+            return "源DataFrame中没有任何无穷大值。", True
         else:
-            return (
-                f"The source dataframe has {INF_count} infinite values. Please check the implementation.",
-                False,
-            )
+            return f"源DataFrame中有 {inf_count} 个无穷大值。请检查实现。", False
 
 
 class FactorSingleColumnEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """评估因子是否为单列。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, bool]:
         _, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                False,
-            )
+            return "源DataFrame为None。请检查实现。", False
+
         if len(gen_df.columns) == 1:
-            return "The source dataframe has only one column which is correct.", True
+            return "源DataFrame只有一列，这是正确的。", True
         else:
-            return (
-                "The source dataframe has more than one column. Please check the implementation. We only evaluate the first column.",
-                False,
-            )
+            return "源DataFrame有多于一列。请检查实现。我们只评估第一列。", False
 
 
 class FactorOutputFormatEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """使用 LLM 评估输出DataFrame的格式。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, bool]:
         gt_df, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Skip the evaluation of the output format.",
-                False,
-            )
+            return "源DataFrame为None。跳过输出格式评估。", False
+
         buffer = io.StringIO()
         gen_df.info(buf=buffer)
-        gen_df_info_str = f"The user is currently working on a feature related task.\nThe output dataframe info is:\n{buffer.getvalue()}"
+        gen_df_info_str = f"用户当前正在处理一个特征相关的任务。\n输出的DataFrame信息如下:\n{buffer.getvalue()}"
         system_prompt = T(".prompts:evaluator_output_format_system").r(
             scenario=(
                 self.scen.get_scenario_all_desc(implementation.target_task, filtered_tag="feature")
                 if self.scen is not None
-                else "No scenario description."
+                else "没有场景描述。"
             )
         )
 
-        # TODO: with retry_context(retry_n=3, except_list=[KeyError]):
+        # 重试机制，以防LLM返回格式错误
         max_attempts = 3
-        attempts = 0
-        final_evaluation_dict = None
-
-        while attempts < max_attempts:
+        for attempts in range(max_attempts):
             try:
                 api = APIBackend() if attempts == 0 else APIBackend(use_chat_cache=False)
                 resp = api.build_messages_and_create_chat_completion(
@@ -198,239 +174,144 @@ class FactorOutputFormatEvaluator(FactorEvaluator):
                     json_target_type=Dict[str, str | bool | int],
                 )
                 resp_dict = json.loads(resp)
-                resp_dict["output_format_decision"] = str(resp_dict["output_format_decision"]).lower() in ["true", "1"]
-
-                return (
-                    str(resp_dict["output_format_feedback"]),
-                    resp_dict["output_format_decision"],
-                )
+                decision = str(resp_dict["output_format_decision"]).lower() in ["true", "1"]
+                return str(resp_dict["output_format_feedback"]), decision
             except (KeyError, json.JSONDecodeError) as e:
-                attempts += 1
-                if attempts >= max_attempts:
-                    raise KeyError(
-                        "Wrong JSON Response or missing 'output_format_decision' or 'output_format_feedback' key after multiple attempts."
-                    ) from e
+                if attempts >= max_attempts - 1:
+                    raise KeyError("多次尝试后，JSON响应错误或缺少键。") from e
 
-        return "Failed to evaluate output format after multiple attempts.", False
+        return "多次尝试后评估输出格式失败。", False
 
 
 class FactorDatetimeDailyEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str | object]:
+    """评估因子的时间索引是否为日度数据。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, bool]:
         _, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return "The source dataframe is None. Skip the evaluation of the datetime format.", False
+            return "源DataFrame为None。跳过日期时间格式评估。", False
 
         if "datetime" not in gen_df.index.names:
-            return "The source dataframe does not have a datetime index. Please check the implementation.", False
+            return "源DataFrame没有datetime索引。请检查实现。", False
 
         try:
-            pd.to_datetime(gen_df.index.get_level_values("datetime"))
+            datetimes = pd.to_datetime(gen_df.index.get_level_values("datetime"))
         except Exception:
-            return (
-                f"The source dataframe has a datetime index but it is not in the correct format (maybe a regular string or other objects). Please check the implementation.\n The head of the output dataframe is: \n{gen_df.head()}",
-                False,
-            )
+            return f"datetime索引格式不正确。\n 输出DataFrame的头部信息: \n{gen_df.head()}", False
 
-        time_diff = pd.to_datetime(gen_df.index.get_level_values("datetime")).to_series().diff().dropna().unique()
-        if pd.Timedelta(minutes=1) in time_diff:
-            return (
-                "The generated dataframe is not daily. The implementation is definitely wrong. Please check the implementation.",
-                False,
-            )
-        return "The generated dataframe is daily.", True
+        time_diffs = datetimes.to_series().diff().dropna().unique()
+        if pd.Timedelta(minutes=1) in time_diffs:
+            return "生成的DataFrame不是日度的。实现肯定有误。", False
+
+        return "生成的DataFrame是日度的。", True
 
 
 class FactorRowCountEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """评估生成因子的行数与标准实现的比例。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, float]:
         gt_df, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                False,
-            )
+            return "源DataFrame为None。请检查实现。", 0.0
+
         ratio = min(len(gen_df), len(gt_df)) / max(len(gen_df), len(gt_df))
-        return (
-            (
-                f"The ratio of rows count in the source dataframe to the ground truth dataframe is {ratio:.2f}. "
-                + "Please verify the implementation. "
-                if ratio <= 0.99
-                else ""
-            ),
-            ratio,
-        )
+        feedback = f"源DataFrame与真实DataFrame的行数比例为 {ratio:.2f}。"
+        if ratio <= 0.99:
+            feedback += " 请验证实现。"
+        return feedback, ratio
 
 
 class FactorIndexEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """评估生成因子的索引与标准实现的相似度。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, float]:
         gt_df, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                False,
-            )
+            return "源DataFrame为None。请检查实现。", 0.0
+
         gen_index_set, gt_index_set = set(gen_df.index), set(gt_df.index)
         similarity = len(gen_index_set.intersection(gt_index_set)) / len(gen_index_set.union(gt_index_set))
-        return (
-            (
-                f"The source dataframe and the ground truth dataframe have different index with a similarity of {similarity:.2%}. The similarity is calculated by the number of shared indices divided by the union indices. "
-                + "Please check the implementation."
-                if similarity <= 0.99
-                else ""
-            ),
-            similarity,
-        )
+        feedback = f"索引相似度为 {similarity:.2%}。"
+        if similarity <= 0.99:
+            feedback += " 索引相似度由共享索引数除以联合索引数计算得出。请检查实现。"
+        return feedback, similarity
 
 
 class FactorMissingValuesEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """评估缺失值的数量是否一致。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, bool]:
         gt_df, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                False,
-            )
-        if gen_df.isna().sum().sum() == gt_df.isna().sum().sum():
-            return "Both dataframes have the same missing values.", True
+            return "源DataFrame为None。请检查实现。", False
+
+        gen_na_count = gen_df.isna().sum().sum()
+        gt_na_count = gt_df.isna().sum().sum()
+        if gen_na_count == gt_na_count:
+            return "两个DataFrame具有相同的缺失值。", True
         else:
-            return (
-                f"The dataframes do not have the same missing values. The source dataframe has {gen_df.isna().sum().sum()} missing values, while the ground truth dataframe has {gt_df.isna().sum().sum()} missing values. Please check the implementation.",
-                False,
-            )
+            return f"缺失值数量不同。源DataFrame有 {gen_na_count} 个，而真实DataFrame有 {gt_na_count} 个。", False
 
 
 class FactorEqualValueRatioEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    """评估值相等的比例（在一定容忍度内）。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, float]:
         gt_df, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                -1,
-            )
+            return "源DataFrame为None。请检查实现。", -1.0
+
         try:
             close_values = gen_df.sub(gt_df).abs().lt(1e-6)
-            result_int = close_values.astype(int)
-            pos_num = result_int.sum().sum()
-            acc_rate = pos_num / close_values.size
-        except:
-            close_values = gen_df
-        if close_values.all().iloc[0]:
-            return (
-                "All values in the dataframes are equal within the tolerance of 1e-6.",
-                acc_rate,
-            )
-        else:
-            return (
-                "Some values differ by more than the tolerance of 1e-6. Check for rounding errors or differences in the calculation methods.",
-                acc_rate,
-            )
+            acc_rate = close_values.sum().sum() / close_values.size
+            if close_values.all().iloc[0]:
+                return "所有值在1e-6的容忍度内相等。", acc_rate
+            else:
+                return "部分值的差异超过1e-6的容忍度。请检查舍入误差或计算方法的差异。", acc_rate
+        except Exception:
+            return "计算值相等比例时出错。", -1.0
 
 
 class FactorCorrelationEvaluator(FactorEvaluator):
+    """评估因子值的相关性（IC 和 RankIC）。"""
     def __init__(self, hard_check: bool, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.hard_check = hard_check
+        self.hard_check = hard_check  # 是否进行硬性检查（相关性必须高于阈值）
 
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-    ) -> Tuple[str, object]:
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace) -> Tuple[str, bool | float]:
         gt_df, gen_df = self._get_df(gt_implementation, implementation)
         if gen_df is None:
-            return (
-                "The source dataframe is None. Please check the implementation.",
-                False,
-            )
+            return "源DataFrame为None。请检查实现。", False
+
         concat_df = pd.concat([gen_df, gt_df], axis=1)
         concat_df.columns = ["source", "gt"]
         ic = concat_df.groupby("datetime").apply(lambda df: df["source"].corr(df["gt"])).dropna().mean()
-        ric = (
-            concat_df.groupby("datetime")
-            .apply(lambda df: df["source"].corr(df["gt"], method="spearman"))
-            .dropna()
-            .mean()
-        )
+        ric = concat_df.groupby("datetime").apply(lambda df: df["source"].corr(df["gt"], method="spearman")).dropna().mean()
 
         if self.hard_check:
             if ic > 0.99 and ric > 0.99:
-                return (
-                    f"The dataframes are highly correlated. The ic is {ic:.6f} and the rankic is {ric:.6f}.",
-                    True,
-                )
+                return f"DataFrame高度相关。IC为 {ic:.6f}，RankIC为 {ric:.6f}。", True
             else:
-                return (
-                    f"The dataframes are not sufficiently high correlated. The ic is {ic:.6f} and the rankic is {ric:.6f}. Investigate the factors that might be causing the discrepancies and ensure that the logic of the factor calculation is consistent.",
-                    False,
-                )
+                return f"DataFrame相关性不足。IC为 {ic:.6f}，RankIC为 {ric:.6f}。", False
         else:
-            return f"The ic is ({ic:.6f}) and the rankic is ({ric:.6f}).", ic
+            return f"IC为 ({ic:.6f})，RankIC为 ({ric:.6f})。", ic
 
 
 class FactorValueEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        implementation: Workspace,
-        gt_implementation: Workspace,
-        version: int = 1,  # 1 for qlib factors and 2 for kaggle factors
-        **kwargs,
-    ) -> Tuple:
+    """综合性的因子值评估器，调用多个子评估器。"""
+    def evaluate(self, implementation: Workspace, gt_implementation: Workspace, version: int = 1, **kwargs) -> Tuple[str, bool | None]:
         conclusions = []
 
-        # Initialize result variables
-        row_result = 0
-        index_result = 0
-        output_format_result = None
-        equal_value_ratio_result = 0
-        high_correlation_result = False
-        row_result = None
-
-        # Check if both dataframe has only one columns Mute this since factor task might generate more than one columns now
-        if version == 1:
-            feedback_str, _ = FactorSingleColumnEvaluator(self.scen).evaluate(implementation, gt_implementation)
-            conclusions.append(feedback_str)
-        elif version == 2:
-            input_shape = self.scen.input_shape
-            _, gen_df = self._get_df(gt_implementation, implementation)
-            if gen_df.shape[-1] > input_shape[-1]:
-                conclusions.append(
-                    "Output dataframe has more columns than input feature which is not acceptable in feature processing tasks. Please check the implementation to avoid generating too many columns. Consider this implementation as a failure."
-                )
-
+        # 检查无穷大值
         feedback_str, inf_evaluate_res = FactorInfEvaluator(self.scen).evaluate(implementation, gt_implementation)
         conclusions.append(feedback_str)
 
-        # Check if the index of the dataframe is ("datetime", "instrument")
+        # 检查输出格式
         feedback_str, _ = FactorOutputFormatEvaluator(self.scen).evaluate(implementation, gt_implementation)
         conclusions.append(feedback_str)
+
         if version == 1:
-            feedback_str, daily_check_result = FactorDatetimeDailyEvaluator(self.scen).evaluate(
-                implementation, gt_implementation
-            )
+            feedback_str, daily_check_result = FactorDatetimeDailyEvaluator(self.scen).evaluate(implementation, gt_implementation)
             conclusions.append(feedback_str)
         else:
             daily_check_result = None
 
-        # Check dataframe format
+        # 如果有标准实现，进行更详细的比较
         if gt_implementation is not None:
             feedback_str, row_result = FactorRowCountEvaluator(self.scen).evaluate(implementation, gt_implementation)
             conclusions.append(feedback_str)
@@ -438,113 +319,77 @@ class FactorValueEvaluator(FactorEvaluator):
             feedback_str, index_result = FactorIndexEvaluator(self.scen).evaluate(implementation, gt_implementation)
             conclusions.append(feedback_str)
 
-            feedback_str, output_format_result = FactorMissingValuesEvaluator(self.scen).evaluate(
-                implementation, gt_implementation
-            )
-            conclusions.append(feedback_str)
-
-            feedback_str, equal_value_ratio_result = FactorEqualValueRatioEvaluator(self.scen).evaluate(
-                implementation, gt_implementation
-            )
+            feedback_str, equal_value_ratio_result = FactorEqualValueRatioEvaluator(self.scen).evaluate(implementation, gt_implementation)
             conclusions.append(feedback_str)
 
             if index_result > 0.99:
-                feedback_str, high_correlation_result = FactorCorrelationEvaluator(
-                    hard_check=True, scen=self.scen
-                ).evaluate(implementation, gt_implementation)
+                feedback_str, high_correlation_result = FactorCorrelationEvaluator(hard_check=True, scen=self.scen).evaluate(implementation, gt_implementation)
             else:
                 high_correlation_result = False
-                feedback_str = "The source dataframe and the ground truth dataframe have different index. Give up comparing the values and correlation because it's useless"
+                feedback_str = "索引不同，放弃比较值和相关性。"
             conclusions.append(feedback_str)
 
-        # Combine all conclusions into a single string
         conclusion_str = "\n".join(conclusions)
 
-        if gt_implementation is not None and (equal_value_ratio_result > 0.99) or high_correlation_result:
+        # 根据子评估结果得出综合决策
+        if gt_implementation is not None and (equal_value_ratio_result > 0.99 or high_correlation_result):
             decision_from_value_check = True
-        elif (
-            row_result is not None
-            and row_result <= 0.99
-            or output_format_result is False
-            or daily_check_result is False
-            or inf_evaluate_res is False
-        ):
+        elif (row_result is not None and row_result <= 0.99 or daily_check_result is False or inf_evaluate_res is False):
             decision_from_value_check = False
         else:
-            decision_from_value_check = None
+            decision_from_value_check = None # 不确定
+
         return conclusion_str, decision_from_value_check
 
 
 class FactorFinalDecisionEvaluator(FactorEvaluator):
-    def evaluate(
-        self,
-        target_task: FactorTask,
-        execution_feedback: str,
-        value_feedback: str,
-        code_feedback: str,
-        **kwargs,
-    ) -> Tuple:
+    """使用 LLM 综合所有反馈，给出最终决策。"""
+    def evaluate(self, target_task: FactorTask, execution_feedback: str, value_feedback: str, code_feedback: str, **kwargs) -> Tuple[bool | None, str | None]:
         system_prompt = T(".prompts:evaluator_final_decision_v1_system").r(
             scenario=(
                 self.scen.get_scenario_all_desc(target_task, filtered_tag="feature")
                 if self.scen is not None
-                else "No scenario description."
+                else "没有场景描述。"
             )
         )
-        execution_feedback_to_render = execution_feedback
 
-        for _ in range(10):  # 10 times to split the content is enough
+        execution_feedback_to_render = execution_feedback
+        # 缩减prompt
+        for _ in range(10):
             user_prompt = T(".prompts:evaluator_final_decision_v1_user").r(
                 factor_information=target_task.get_task_information(),
                 execution_feedback=execution_feedback_to_render,
                 code_feedback=code_feedback,
-                value_feedback=(
-                    value_feedback
-                    if value_feedback is not None
-                    else "No Ground Truth Value provided, so no evaluation on value is performed."
-                ),
+                value_feedback=value_feedback or "未提供真实值，未进行数值评估。",
             )
             if (
-                APIBackend().build_messages_and_calculate_token(
-                    user_prompt=user_prompt,
-                    system_prompt=system_prompt,
-                )
+                APIBackend().build_messages_and_calculate_token(user_prompt=user_prompt, system_prompt=system_prompt)
                 > APIBackend().chat_token_limit
             ):
                 execution_feedback_to_render = execution_feedback_to_render[len(execution_feedback_to_render) // 2 :]
             else:
                 break
 
-        # TODO:  with retry_context(retry_n=3, except_list=[KeyError]):
-        final_evaluation_dict = None
-        attempts = 0
+        # 带重试的LLM调用
         max_attempts = 3
-
-        while attempts < max_attempts:
+        for attempts in range(max_attempts):
             try:
                 api = APIBackend() if attempts == 0 else APIBackend(use_chat_cache=False)
-                final_evaluation_dict = json.loads(
-                    api.build_messages_and_create_chat_completion(
-                        user_prompt=user_prompt,
-                        system_prompt=system_prompt,
-                        json_mode=True,
-                        seed=attempts,  # in case of useless retrying when cache enabled.
-                        json_target_type=Dict[str, str | bool | int],
-                    ),
+                resp = api.build_messages_and_create_chat_completion(
+                    user_prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    json_mode=True,
+                    seed=attempts,
+                    json_target_type=Dict[str, str | bool | int],
                 )
-                final_decision = final_evaluation_dict["final_decision"]
+                final_evaluation_dict = json.loads(resp)
+                final_decision = str(final_evaluation_dict["final_decision"]).lower() in ["true", "1"]
                 final_feedback = final_evaluation_dict["final_feedback"]
-
-                final_decision = str(final_decision).lower() in ["true", "1"]
                 return final_decision, final_feedback
-
             except json.JSONDecodeError as e:
-                raise ValueError("Failed to decode JSON response from API.") from e
+                raise ValueError("无法解码API的JSON响应。") from e
             except KeyError as e:
-                attempts += 1
-                if attempts >= max_attempts:
-                    raise KeyError(
-                        "Response from API is missing 'final_decision' or 'final_feedback' key after multiple attempts."
-                    ) from e
+                if attempts >= max_attempts - 1:
+                    raise KeyError("多次尝试后，API响应中缺少 'final_decision' 或 'final_feedback' 键。") from e
 
         return None, None

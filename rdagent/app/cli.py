@@ -1,24 +1,22 @@
 """
-CLI entrance for all rdagent application.
+所有rdagent应用程序的CLI入口。
 
-This will
-- make rdagent a nice entry and
-- autoamtically load dotenv
+这将：
+- 为rdagent提供一个良好的入口
+- 自动加载dotenv
 """
 
 import sys
-
-from dotenv import load_dotenv
-
-load_dotenv(".env")
-# 1) Make sure it is at the beginning of the script so that it will load dotenv before initializing BaseSettings.
-# 2) The ".env" argument is necessary to make sure it loads `.env` from the current directory.
-
 import subprocess
 from importlib.resources import path as rpath
 
+from dotenv import load_dotenv
 import typer
 
+# 确保在初始化BaseSettings之前加载dotenv
+load_dotenv(".env")
+
+# 导入各个应用程序的主函数
 from rdagent.app.data_science.loop import main as data_science
 from rdagent.app.general_model.general_model import (
     extract_models_and_implement as general_model,
@@ -31,20 +29,21 @@ from rdagent.app.utils.health_check import health_check
 from rdagent.app.utils.info import collect_info
 from rdagent.log.mle_summary import grade_summary as grade_summary
 
+# 创建一个typer应用程序实例
 app = typer.Typer()
 
 
 def ui(port=19899, log_dir="", debug: bool = False, data_science: bool = False):
     """
-    start web app to show the log traces.
+    启动Web应用程序以显示日志轨迹。
     """
     if data_science:
         with rpath("rdagent.log.ui", "dsapp.py") as app_path:
-            cmds = ["streamlit", "run", app_path, f"--server.port={port}"]
+            cmds = ["streamlit", "run", str(app_path), f"--server.port={port}"]
             subprocess.run(cmds)
         return
     with rpath("rdagent.log.ui", "app.py") as app_path:
-        cmds = ["streamlit", "run", app_path, f"--server.port={port}"]
+        cmds = ["streamlit", "run", str(app_path), f"--server.port={port}"]
         if log_dir or debug:
             cmds.append("--")
         if log_dir:
@@ -56,19 +55,20 @@ def ui(port=19899, log_dir="", debug: bool = False, data_science: bool = False):
 
 def server_ui(port=19899):
     """
-    start web app to show the log traces in real time
+    启动Web应用程序以实时显示日志轨迹。
     """
     subprocess.run(["python", "rdagent/log/server/app.py", f"--port={port}"])
 
 
 def ds_user_interact(port=19900):
     """
-    start web app to show the log traces in real time
+    启动Web应用程序以实时显示日志轨迹。
     """
     commands = ["streamlit", "run", "rdagent/log/ui/ds_user_interact.py", f"--server.port={port}"]
     subprocess.run(commands)
 
 
+# 将各个应用程序的命令添加到typer应用程序中
 app.command(name="fin_factor")(fin_factor)
 app.command(name="fin_model")(fin_model)
 app.command(name="fin_quant")(fin_quant)

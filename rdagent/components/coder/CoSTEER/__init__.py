@@ -18,6 +18,10 @@ from rdagent.oai.backend.base import RD_Agent_TIMER_wrapper
 
 
 class CoSTEER(Developer[Experiment]):
+    """
+    CoSTEER (Code evolution with STrEER) 框架的核心实现。
+    它是一个通用的开发者类，通过演进的方式来完成开发任务。
+    """
     def __init__(
         self,
         settings: CoSTEERSettings,
@@ -34,12 +38,8 @@ class CoSTEER(Developer[Experiment]):
         self.settings = settings
 
         self.max_loop = settings.max_loop if max_loop is None else max_loop
-        self.knowledge_base_path = (
-            Path(settings.knowledge_base_path) if settings.knowledge_base_path is not None else None
-        )
-        self.new_knowledge_base_path = (
-            Path(settings.new_knowledge_base_path) if settings.new_knowledge_base_path is not None else None
-        )
+        self.knowledge_base_path = Path(settings.knowledge_base_path) if settings.knowledge_base_path else None
+        self.new_knowledge_base_path = Path(settings.new_knowledge_base_path) if settings.new_knowledge_base_path else None
 
         self.with_knowledge = with_knowledge
         self.knowledge_self_gen = knowledge_self_gen
@@ -47,50 +47,35 @@ class CoSTEER(Developer[Experiment]):
         self.evaluator = eva
         self.evolving_version = evolving_version
 
-        # init rag method
+        # 根据演进版本初始化 RAG (Retrieval-Augmented Generation) 策略
         self.rag = (
-            CoSTEERRAGStrategyV2(
-                settings=settings,
-                former_knowledge_base_path=self.knowledge_base_path,
-                dump_knowledge_base_path=self.new_knowledge_base_path,
-                evolving_version=self.evolving_version,
-            )
+            CoSTEERRAGStrategyV2(settings=settings, former_knowledge_base_path=self.knowledge_base_path, dump_knowledge_base_path=self.new_knowledge_base_path, evolving_version=self.evolving_version)
             if self.evolving_version == 2
-            else CoSTEERRAGStrategyV1(
-                settings=settings,
-                former_knowledge_base_path=self.knowledge_base_path,
-                dump_knowledge_base_path=self.new_knowledge_base_path,
-                evolving_version=self.evolving_version,
-            )
+            else CoSTEERRAGStrategyV1(settings=settings, former_knowledge_base_path=self.knowledge_base_path, dump_knowledge_base_path=self.new_knowledge_base_path, evolving_version=self.evolving_version)
         )
 
     def get_develop_max_seconds(self) -> int | None:
-        """
-        Get the maximum seconds for the develop task.
-        Sub classes might override this method to provide a different value.
-        """
+        """获取开发任务的最大秒数。子类可以重写此方法。"""
         return None
 
     def _get_last_fb(self) -> CoSTEERMultiFeedback:
+        """获取演进轨迹中的最后一个反馈。"""
         fb = self.evolve_agent.evolving_trace[-1].feedback
-        assert fb is not None, "feedback is None"
-        assert isinstance(fb, CoSTEERMultiFeedback), "feedback must be of type CoSTEERMultiFeedback"
+        assert fb is not None, "反馈不应为None"
+        assert isinstance(fb, CoSTEERMultiFeedback), "反馈必须是 CoSTEERMultiFeedback 类型"
         return fb
 
     def should_use_new_evo(self, base_fb: CoSTEERMultiFeedback | None, new_fb: CoSTEERMultiFeedback) -> bool:
         """
-        Compare new feedback with the fallback feedback.
-
-        Returns:
-            bool: True if the new feedback better and False if the new feedback is worse or invalid.
+        比较新旧反馈，判断是否应采用新的演进结果作为备用方案。
+        目前逻辑比较简单：只要新的反馈是可接受的（例如，没有导致程序崩溃），就采用。
         """
-        if new_fb is not None and new_fb.is_acceptable():
-            return True
-        return False
+        return new_fb is not None and new_fb.is_acceptable()
 
     def develop(self, exp: Experiment) -> Experiment:
-
-        # init intermediate items
+        """
+        核心开发方法，通过多轮演进生成最终的代码实现。
+        """
         max_seconds = self.get_develop_max_seconds()
         evo_exp = EvolvingItem.from_experiment(exp)
 
@@ -105,72 +90,66 @@ class CoSTEER(Developer[Experiment]):
             filelock_path=self.settings.filelock_path,
         )
 
-        # Evolving the solution
+        # 开始演进循环
         start_datetime = datetime.now()
-        fallback_evo_exp = None
+        fallback_evo_exp = None  # 存储最佳的备用解决方案
         fallback_evo_fb = None
         reached_max_seconds = False
 
-        evo_fb = None
         for evo_exp in self.evolve_agent.multistep_evolve(evo_exp, self.evaluator):
-            assert isinstance(evo_exp, Experiment)  # multiple inheritance
             evo_fb = self._get_last_fb()
-            update_fallback = self.should_use_new_evo(
-                base_fb=fallback_evo_fb,
-                new_fb=evo_fb,
-            )
-            if update_fallback:
+
+            # 判断是否更新备用方案
+            if self.should_use_new_evo(base_fb=fallback_evo_fb, new_fb=evo_fb):
                 fallback_evo_exp = deepcopy(evo_exp)
                 fallback_evo_fb = deepcopy(evo_fb)
-                fallback_evo_exp.create_ws_ckp()  # NOTE: creating checkpoints for saving files in the workspace to prevent inplace mutation.
+                fallback_evo_exp.create_ws_ckp()  # 创建工作空间快照以防被修改
 
-            logger.log_object(evo_exp.sub_workspace_list, tag="evolving code")
-            for sw in evo_exp.sub_workspace_list:
-                logger.info(f"evolving workspace: {sw}")
-            if max_seconds is not None and (datetime.now() - start_datetime).total_seconds() > max_seconds:
-                logger.info(f"Reached max time limit {max_seconds} seconds, stop evolving")
+            # 检查是否超时
+            if max_seconds and (datetime.now() - start_datetime).total_seconds() > max_seconds:
+                logger.info(f"达到最大时间限制 {max_seconds} 秒，停止演进")
                 reached_max_seconds = True
                 break
             if RD_Agent_TIMER_wrapper.timer.started and RD_Agent_TIMER_wrapper.timer.is_timeout():
-                logger.info("Global timer is timeout, stop evolving")
+                logger.info("全局计时器超时，停止演进")
                 break
 
         try:
-            # Fallback is required because we might not choose the last acceptable evo to submit.
+            # 循环结束后，回退到最佳的备用解决方案
             if fallback_evo_exp is not None:
-                logger.info("Fallback to the fallback solution.")
+                logger.info("回退到备用解决方案。")
                 evo_exp = fallback_evo_exp
-                evo_exp.recover_ws_ckp()
+                evo_exp.recover_ws_ckp() # 恢复工作空间快照
                 evo_fb = fallback_evo_fb
-            assert evo_fb is not None  # multistep_evolve should run at least once
+
+            assert evo_fb is not None, "演进循环至少应运行一次"
             evo_exp = self._exp_postprocess_by_feedback(evo_exp, evo_fb)
         except CoderError as e:
             e.caused_by_timeout = reached_max_seconds
             raise e
 
+        # 将最终的工作空间和代码更新回原始的实验对象
         exp.sub_workspace_list = evo_exp.sub_workspace_list
         exp.experiment_workspace = evo_exp.experiment_workspace
         return exp
 
     def _exp_postprocess_by_feedback(self, evo: Experiment, feedback: CoSTEERMultiFeedback) -> Experiment:
         """
-        Responsibility:
-        - Raise Error if it failed to handle the develop task
-        -
+        根据最终的反馈对实验进行后处理。
+        如果所有任务都失败了，则抛出异常。
         """
         assert isinstance(evo, Experiment)
         assert isinstance(feedback, CoSTEERMultiFeedback)
         assert len(evo.sub_workspace_list) == len(feedback)
 
-        # FIXME: when whould the feedback be None?
         failed_feedbacks = [
-            f"- feedback{index + 1:02d}:\n  - execution: {f.execution}\n  - return_checking: {f.return_checking}\n  - code: {f.code}"
+            f"- 反馈{index + 1:02d}:\n  - 执行: {f.execution}\n  - 返回值检查: {f.return_checking}\n  - 代码: {f.code}"
             for index, f in enumerate(feedback)
             if f is not None and not f.is_acceptable()
         ]
 
         if len(failed_feedbacks) == len(feedback):
             feedback_summary = "\n".join(failed_feedbacks)
-            raise CoderError(f"All tasks are failed:\n{feedback_summary}")
+            raise CoderError(f"所有任务都失败了:\n{feedback_summary}")
 
         return evo

@@ -1,2 +1,2 @@
-# Configuration file for ensemble component
-# Currently empty as no specific configuration is needed
+# ensemble 组件的配置文件
+# 目前为空，因为不需要特定的配置

@@ -1,7 +1,7 @@
 """
-The context7 is based on a modified version of the context7.
+context7 基于 context7 的修改版本。
 
-You can follow the instructions to install it
+您可以按照以下说明进行安装
 
     mkdir -p ~/tmp/
     cd ~/tmp/ && git clone https://github.com/Hoder-zyf/context7.git
@@ -15,17 +15,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Project specific settings."""
+    """项目特定设置。"""
 
+    # context7 服务的 URL
     url: str = "http://localhost:8124/mcp"
+    # 请求超时时间（秒）
     timeout: int = 120
+    # 是否启用缓存
     enable_cache: bool = False
-    # set CONTEXT7_ENABLE_CACHE=true in .env to enable cache
+    # 在 .env 文件中设置 CONTEXT7_ENABLE_CACHE=true 以启用缓存
 
     model_config = SettingsConfigDict(
+        # 环境变量前缀
         env_prefix="CONTEXT7_",
-        # extra="allow", # Does it allow extrasettings
     )
 
 
+# 创建一个全局的设置实例
 SETTINGS = Settings()
