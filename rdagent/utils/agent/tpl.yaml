@@ -1,36 +1,56 @@
+# 此 YAML 文件定义了各种 Agent 输出格式的规范模板。
+# 这些模板用于指导 LLM（大语言模型）生成结构化、可解析的响应。
+
+# --- Python 代码输出规范 ---
 PythonAgentOut: |-
+  # 指示 LLM 返回一个 Python 代码块。
   The return code should be like
   ```Python
   <You code>
   ```
 
+# --- Markdown 内容输出规范 ---
 MarkdownOut: |-
+  # 指示 LLM 返回一个 Markdown 内容块。
+  # 使用四个反引号 ```` 是为了避免与 Markdown 文件中可能包含的三个反引号 ``` 产生冲突。
   The return content should be like the format below(Please note tha "````" is used to avoid confliction of "```" in markdown file)
   ````markdown
   <the content of markdown file>
   ````
 
+# --- 批量文件编辑 (JSON 格式) 输出规范 ---
 BatchEditOut: |-
+  # 指示 LLM 以 JSON 格式返回对工作区中多个文件的编辑操作。
   You should return an edition that applies to multiple files in a workspace in JSON.
+  # 约束：除了模型文件，其他文件不应被重命名。
   Except for the model file, other files should not be renamed.
+  # 约束：不需要修改的文件不应包含在返回的文本中。
   Files that do not need modifications should not be included in the returned text.
 
+  # 示例格式：
   For example:
   Inject the code into the folder. Your file name should always contain the suffix. Your file name keys should be unique to avoid delete or replace conflicts.
   {
-      <file name1>: "<code>",  // indicate writing <code> into <file name1> (create a new file or update an existing file)
+      # <文件名1>: "<code>"  表示将 <code> 写入 <文件名1> (可以是创建新文件或更新现有文件)。
+      <file name1>: "<code>",
+      # Jinja2 模板语法：如果 with_del 为 True，则包含删除文件的说明。
       {% if with_del %}
-      <file name2>: "__DEL__"  // indicate removing file name2. When we want to just remove a file or replace a file to a new one, we usually use this
+      # <文件名2>: "__DEL__"  表示删除 <文件名2>。这通常用于仅删除文件或替换文件。
+      <file name2>: "__DEL__"
       {% else %}
-      <file name2> (optional): "<code>"  // indicate writing <code> into <file name2> (create a new file or update an existing file)
+      # 否则，只提供更新/创建的说明。
+      <file name2> (optional): "<code>"
       {% endif %}
   }
 
+# --- 批量 Python 文件编辑 (代码块格式) 输出规范 ---
 PythonBatchEditOut: |-
+  # 指示 LLM 以多个命名代码块的格式返回对工作区中多个文件的编辑操作。
   You should return an edition that applies to multiple files in a workspace.
   Except for the model file, other files should not be renamed.
   Files that do not need modifications should not be included in the returned text.
 
+  # 响应格式示例：
   Response format should be like:
   ```<file name 1>
   <code>
@@ -45,20 +65,28 @@ PythonBatchEditOut: |-
   {% endif %}
   ...
 
-  NOTE:
+  # 注意事项 (NOTE):
+  # - 文件名应始终包含后缀。
   - The file name should always contain the suffix.
+  # - 文件名应唯一，以防止删除或替换时发生冲突。
   - The file name should be unique to prevent conflicts during removal or replacement.
+  # - 要将代码写入文件，请提供相应的代码替换 "<code>"（创建新文件或更新现有文件）。
   - To indicate writing code into a file, provide the corresponding code to replace "<code>" (creating a new file or updating an existing one).
   {% if with_del %}
+  # - 要明确删除文件，请在该文件的代码块内仅提供 `__DEL__`。
   - To explicitly remove a file, provide only `__DEL__` within the code block for that file.
+  # - 要用新文件替换旧文件，首先为原始文件提供 `__DEL__`，然后包含一个带有新文件名和新代码的独立条目。
   - To replace a file with a new one, first provide ` __DEL__` for the original file, then include a separate entry with new file name and the new code.
   {% endif %}
 
 
-# The following prompt is modified from https://cookbook.openai.com/examples/gpt4-1_prompting_guide
+# --- 批量 Python 文件编辑 (自定义 Patch 格式) 输出规范 ---
+# 以下提示修改自 OpenAI Cookbook: https://cookbook.openai.com/examples/gpt4-1_prompting_guide
 PythonBatchPatchOut: |-
+  # 介绍一种自定义的工具，用于方便地添加、删除、移动或编辑代码文件。
   This is a custom utility that makes it more convenient to add, remove, move, or edit code files. `apply_patch` effectively allows you to execute a diff/patch against a file, but the format of the diff specification is unique to this task, so pay careful attention to these instructions. To use the `apply_patch` command, you should pass a message of the following structure as "input":
 
+  # 示例 Shell 命令
   %%bash
   apply_patch <<"EOF"
   *** Begin Patch
@@ -66,17 +94,28 @@ PythonBatchPatchOut: |-
   *** End Patch
   EOF
 
+  # [YOUR_PATCH] 部分是实际的补丁内容，遵循以下 V4A diff 格式。
   Where [YOUR_PATCH] is the actual content of your patch, specified in the following V4A diff format.
 
+  # 格式说明：
+  # *** [操作] File: [文件路径] -> 操作可以是 Add, Update, 或 Delete 之一。
   *** [ACTION] File: [path/to/file] -> ACTION can be one of Add, Update, or Delete.
+  # 对于每个需要更改的代码片段，重复以下结构：
   For each snippet of code that needs to be changed, repeat the following:
+  # [前置上下文] -> 关于上下文的详细说明见下文。
   [context_before] -> See below for further instructions on context.
+  # - [旧代码] -> 旧代码前加减号。
   - [old_code] -> Precede the old code with a minus sign.
+  # + [新代码] -> 新的替换代码前加加号。
   + [new_code] -> Precede the new, replacement code with a plus sign.
+  # [后置上下文]
   [context_after] -> See below for further instructions on context.
 
+  # 关于 [前置上下文] 和 [后置上下文] 的说明：
   For instructions on [context_before] and [context_after]:
+  # - 默认情况下，显示每个更改点上方和下方的 3 行代码作为上下文。如果一个更改紧邻上一个更改（在 3 行内），则不要重复上下文行。
   - By default, show 3 lines of code immediately above and 3 lines immediately below each change. If a change is within 3 lines of a previous change, do NOT duplicate the first change’s [context_after] lines in the second change’s [context_before] lines.
+  # - 如果 3 行上下文不足以在文件中唯一定位代码片段，请使用 @@ 操作符来指明代码片段所属的类或函数。
   - If 3 lines of context is insufficient to uniquely identify the snippet of code within the file, use the @@ operator to indicate the class or function to which the snippet belongs. For instance, we might have:
   @@ class BaseClass
   [3 lines of pre-context]
@@ -84,6 +123,7 @@ PythonBatchPatchOut: |-
   + [new_code]
   [3 lines of post-context]
 
+  # - 如果一个代码块在类或函数中重复多次，以至于单个 @@ 和 3 行上下文都无法唯一定位，可以使用多个 @@ 语句来跳转到正确的上下文。
   - If a code block is repeated so many times in a class or function such that even a single @@ statement and 3 lines of context cannot uniquely identify the snippet of code, you can use multiple `@@` statements to jump to the right context. For instance:
 
   @@ class BaseClass
@@ -93,8 +133,10 @@ PythonBatchPatchOut: |-
   + [new_code]
   [3 lines of post-context]
 
+  # 注意，这种 diff 格式不使用行号，因为上下文足以唯一定位代码。
   Note, then, that we do not use line numbers in this diff format, as the context is enough to uniquely identify code. An example of a message that you might pass as "input" to this function, in order to apply a patch, is shown below.
 
+  # 完整示例：
   %%bash
   apply_patch <<"EOF"
   *** Begin Patch

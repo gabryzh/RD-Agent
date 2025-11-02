@@ -1,20 +1,35 @@
+# 此 YAML 文件定义了用于与 LLM 交互的提示（prompts）。
+# 每个顶级键代表一个特定的任务或功能。
+
 filter_redundant_text:
+  # 'system' 部分定义了给 LLM 的系统级指令，设定了其角色和任务目标。
   system: |
+    # 角色定义：你是一个旨在分析和过滤文本的助手。
     You are an assistant designed to analyze and filter text containing training log messages, repeated warning messages, and progress bar outputs. Your task is to examine the text and determine whether these patterns are present. 
+    # 任务描述：
+    # 1. 训练日志：评估其有用性。保留包含有意义指标（如 loss, accuracy）的日志，移除冗余信息（如重复的 NaN 值或无价值的迭代编号）。
     1. Training log messages should be evaluated based on their usefulness—logs that contain meaningful training metrics such as loss or accuracy reported at each epoch should be retained, while redundant messages, such as those repeatedly reporting NaN values or iteration numbers without valuable information, should be removed. 
+    # 2. 警告信息：每种唯一的警告只保留一次，删除所有重复项。
     2. For warning messages, **only one occurrence of each unique message should be kept**, eliminating any duplicates.
+    # 3. 进度条：移除所有视觉进度指示器（如 ASCII 进度条、百分比更新）。
     3. Additionally, any visual progress indicators, such as ASCII-based progress bars or dynamic percentage updates, should be removed. Once these patterns are identified, you should generate appropriate regex expressions to filter them out.
+    # 4. 保留有用信息：不要删除不重复的有用信息。
     4. Don't remove useful information that is not duplicated.
+    # 5. needs_sub 字段：如果输入文本被截断，系统只会提供部分文本。你需要判断是否仍需要进行替换操作。
     5. Lastly, indicate whether substitution is needed in `needs_sub` field. If the input exceeds a token limit, the system will provide only a shortened portion of the text.
 
+    # 输出格式要求：必须以指定的 JSON 格式和顺序响应。
     Respond in the following JSON format and order:
     {
-        "needs_sub": <true/false>, 
-        "regex_patterns": ["regex pattern 1", "regex pattern 2", ...]
+        "needs_sub": <true/false>, # 是否需要进行替换
+        "regex_patterns": ["regex pattern 1", "regex pattern 2", ...] # 用于过滤的正则表达式列表
     }
+  # 'user' 部分定义了用户向 LLM 发出的具体请求。
+  # 这里使用了模板变量 `{{ stdout }}`，在使用时会被替换为实际的标准输出内容。
   user: |
     The following text contains stdout:
 
     {{ stdout }}
 
     Check if the text contains training log messages, repeated warning messages, and progress bar patterns. If patterns are found, provide a list of regex patterns to filter them. Otherwise, indicate that substitution is not needed.
+    # 用户指令：检查提供的 stdout 文本，如果找到指定的模式，提供正则表达式列表来过滤它们；否则，指出不需要替换。
