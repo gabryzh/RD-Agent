@@ -1,14 +1,18 @@
+# Qlib 初始化配置
 qlib_init:
     provider_uri: "~/.qlib/qlib_data/cn_data"
     region: cn
 
+# 定义市场和基准
 market: &market csi300
 benchmark: &benchmark SH000300
 
+# 数据处理器配置
 data_handler_config: &data_handler_config
     start_time: 2008-01-01
     end_time: 2022-08-01
     instruments: *market
+    # 数据加载器，合并 Alpha158 和外部因子
     data_loader:
         class: NestedDataLoader
         kwargs:
@@ -35,6 +39,7 @@ data_handler_config: &data_handler_config
                   kwargs:
                     config: "combined_factors_df.parquet"
     
+    # 推理阶段的数据处理器
     infer_processors:
         - class: RobustZScoreNorm
           kwargs:
@@ -45,12 +50,14 @@ data_handler_config: &data_handler_config
         - class: Fillna
           kwargs:
               fields_group: feature
+    # 学习阶段的数据处理器
     learn_processors:
         - class: DropnaLabel
         - class: CSZScoreNorm
           kwargs:
               fields_group: label
 
+# 投资组合分析配置
 port_analysis_config: &port_analysis_config
     strategy:
         class: TopkDropoutStrategy
@@ -71,11 +78,15 @@ port_analysis_config: &port_analysis_config
             close_cost: 0.0015
             min_cost: 5
 
+# 任务配置
 task:
+    # 模型配置
     model:
+        # 使用通用的 PyTorch 神经网络模型
         class: GeneralPTNN
         module_path: qlib.contrib.model.pytorch_general_nn
         kwargs:
+            # 训练超参数，通过环境变量动态传入
             n_epochs: {{ n_epochs }}
             lr: {{ lr }}
             early_stop: {{ early_stop }}
@@ -85,11 +96,15 @@ task:
             loss: mse
             n_jobs: 20
             GPU: 0
+            # PyTorch 模型的位置，指向外部 model.py 文件中的模型类
             pt_model_uri: "model.model_cls"
+            # PyTorch 模型的参数，动态传入
             pt_model_kwargs: {
                 "num_features": {{ num_features }}{% if num_timesteps %}, "num_timesteps": {{ num_timesteps }}{% endif %}
             }
+    # 数据集配置
     dataset:
+        # 数据集类名，通过环境变量动态传入，默认为 DatasetH
         class: {{ dataset_cls | default("DatasetH") }}
         module_path: qlib.data.dataset
         kwargs:
@@ -101,7 +116,9 @@ task:
                 train: [2008-01-01, 2014-12-31]
                 valid: [2015-01-01, 2016-12-31]
                 test: [2017-01-01, 2020-08-01]
+            # 如果定义了 step_len，则传入（主要用于时序数据集）
             {% if step_len %}step_len: {{ step_len }}{% endif %}
+    # 记录器配置
     record: 
         - class: SignalRecord
           module_path: qlib.workflow.record_temp

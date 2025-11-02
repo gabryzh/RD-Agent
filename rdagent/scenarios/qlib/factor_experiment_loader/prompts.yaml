@@ -1,76 +1,82 @@
+# --- 因子提取相关提示 ---
 extract_factors_system: |-
+    # 系统提示：提取因子和模型
     用户会提供一篇金融工程研报，其中包括了量化因子和模型研究，请按照要求抽取以下信息:
     1. 概述这篇研报的主要研究思路;
     2. 抽取出所有的因子，并概述因子的计算过程，请注意有些因子可能存在于表格中，请不要遗漏，因子的名称请使用英文，不能包含空格，可用下划线连接，研报中可能不含有因子，若没有请返回空字典;
     3. 抽取研报里面的所有模型，并概述模型的计算过程，可以分步骤描述模型搭建或计算的过程，研报中可能不含有模型，若没有请返回空字典;
 
-    user will treat your factor name as key to store the factor, don't put any interaction message in the content. Just response the output without any interaction and explanation.
-    All names should be in English.
-    Respond with your analysis in JSON format. The JSON schema should include:
+    用户会将您的因子名称作为键来存储因子，请不要在内容中包含任何交互性信息。只需响应输出，无需任何交互和解释。
+    所有名称都应为英文。
+    请以 JSON 格式响应您的分析。JSON 结构应包括：
     {
-        "summary": "The summary of this report",
+        "summary": "本报告的摘要",
         "factors": {
-            "Name of factor 1": "Description to factor 1",
-            "Name of factor 2": "Description to factor 2"
+            "因子1的名称": "因子1的描述",
+            "因子2的名称": "因子2的描述"
         },
         "models": {
-            "Name of model 1": "Description to model 1",
-            "Name of model 2": "Description to model 2"
+            "模型1的名称": "模型1的描述",
+            "模型2的名称": "模型2的描述"
         }
     }
 
 extract_factors_follow_user: |-
-    Please continue extracting the factors. Please ignore factors appeared in former messages. If no factor is found, please return an empty dict.
-    Notice: You should not miss any factor in the report! Some factors might appear several times in the report. You can repeat them to avoid missing other factors.
-    Respond with your analysis in JSON format. The JSON schema should include:
+    # 用户提示：继续提取因子（用于多轮对话）
+    请继续提取因子。请忽略前面消息中已出现的因子。如果未找到因子，请返回一个空字典。
+    注意：您不应错过报告中的任何一个因子！有些因子可能会在报告中多次出现。您可以重复它们以避免遗漏其他因子。
+    请以 JSON 格式响应您的分析。JSON 结构应包括：
     {
         "factors": {
-            "Name of factor 1": "Description to factor 1",
-            "Name of factor 2": "Description to factor 2"
+            "因子1的名称": "因子1的描述",
+            "因子2的名称": "因子2的描述"
         }
     }
 
 extract_factor_formulation_system: |-
-    I have a financial engineering research report and a list of factors extracted from it. I need assistance in extracting specific information based on the report and the provided list of factors. The tasks are as follows:
+    # 系统提示：提取因子公式
+    我有一份金融工程研究报告和从中提取的因子列表。我需要帮助，根据报告和提供的因子列表提取特定信息。任务如下：
 
-    1. For each factor, I need its calculation formula in LaTeX format. The variable names within the formulas should not contain spaces; instead, use underscores to connect words. Ensure that the factor names within the formulas are consistent with the ones I've provided.
-    2. For each factor formula, provide explanations for the variables and functions used. The explanations should be in English, and the variable and function names should match those used in the formulas.
+    1. 对于每个因子，我需要其 LaTeX 格式的计算公式。公式中的变量名不应包含空格；请使用下划线连接单词。请确保公式中的因子名称与我提供的名称一致。
+    2. 对于每个因子公式，请提供所用变量和函数的解释。解释应为英文，变量和函数名称应与公式中使用的名称匹配。
 
-    Here are the sources of data I have:
+    我拥有的数据源如下：
 
-    1. Stock Trade Data Table: Contains information on stock trades, including daily open, close, high, low, VWAP prices, volume, and turnover.
-    2. Financial Data Table: Contains company financial statements, such as the balance sheet, income statement, and cash flow statement.
-    3. Stock Fundamental Data Table: Contains basic information about stocks, like total shares outstanding, free float shares, industry classification, market classification, etc.
-    4. High-Frequency Data: Contains price and volume of each stock at the minute level, including open, close, high, low, volume, and VWAP.
+    1. 股票交易数据表：包含股票交易信息，如每日开盘价、收盘价、最高价、最低价、VWAP 价格、成交量和换手率。
+    2. 财务数据表：包含公司财务报表，如资产负债表、利润表和现金流量表。
+    3. 股票基本数据表：包含股票的基本信息，如总股本、自由流通股、行业分类、市场分类等。
+    4. 高频数据：包含每只股票的分钟级价格和成交量，包括开盘价、收盘价、最高价、最低价、成交量和 VWAP。
 
-    Please expand the formulation to use the source data I have provided. If the number of factors exceeds the token limit, extract the formulas for as many factors as possible without exceeding the limit. Ensure to avoid syntax errors related to special characters in JSON, especially with backslashes and underscores in LaTeX.
+    请展开公式以使用我提供的数据源。如果因子数量超过 token 限制，请在不超过限制的情况下为尽可能多的因子提取公式。请确保避免 JSON 中与特殊字符（尤其是 LaTeX 中的反斜杠和下划线）相关的语法错误。
 
-    Provide your analysis in JSON format, using the following schema:
+    请以 JSON 格式提供您的分析，使用以下结构：
     {
-        "factor name 1": {
-            "formulation": "latex formulation of factor 1",
+        "因子名称1": {
+            "formulation": "因子1的 latex 公式",
             "variables": {
-                "variable or function name 1": "description of variable or function 1",
-                "variable or function name 2": "description of variable or function 2"
+                "变量或函数名1": "变量或函数1的描述",
+                "变量或函数名2": "变量或函数2的描述"
             }
         },
-        "factor name 2": {
-            "formulation": "latex formulation of factor 2",
+        "因子名称2": {
+            "formulation": "因子2的 latex 公式",
             "variables": {
-                "variable or function name 1": "description of variable or function 1",
-                "variable or function name 2": "description of variable or function 2"
+                "变量或函数名1": "变量或函数1的描述",
+                "变量或函数名2": "变量或函数2的描述"
             }
         }
     }
 
-
 extract_factor_formulation_user: |-
-    ===========================Report content:=============================
+    # 用户提示：提取因子公式（提供报告内容和因子列表）
+    ===========================报告内容:=============================
     {{ report_content }}
-    ===========================Factor list in dataframe=============================
+    ===========================DataFrame格式的因子列表=============================
     {{ factor_dict }}
 
+# --- 报告分类相关提示 ---
 classify_system_chinese: |-
+    # 系统提示：研报分类（中文版）
     你是一个研报分类助手。用户会输入一篇金融研报。请按照要求回答：
     因子指能够解释资产收益率或价格等的变量；而模型则指机器学习或深度学习模型，利用因子等变量来预测价格或收益率变化。
 
@@ -82,146 +88,151 @@ classify_system_chinese: |-
     请使用json进行回答。json key为：class
 
 classify_system: |-
-    Your job is classify whether the user input document is a quantitative investment research report. The user will input a document and you should classify it based on the following conditions:
-    1. The document is about finance other than other fields like biology, physics, chemistry, etc.
-    2. The document is a research report on stock selection (which needs to be strictly separated from time selection and base selection) in the field of metalworking quantification.
-    3. The document involves the composition of factors or models, or tests their performance.
+    # 系统提示：研报分类（英文版）
+    你的工作是分类用户输入的文档是否为量化投资研究报告。用户将输入一个文档，你应该根据以下条件对其进行分类：
+    1. 文档是关于金融的，而不是其他领域，如生物、物理、化学等。
+    2. 文档是关于金属加工量化领域的选股研究报告（需要与择时和基金选择严格区分）。
+    3. 文档涉及因子或模型的构成，或测试了它们的性能。
 
-    If the document meets all the above conditions, please return 1; otherwise, please return 0.
+    如果文档满足上述所有条件，请返回1；否则，请返回0。
 
-    Please respond with your decision in JSON format. Just respond the output json string without any interaction and explanation.
-    The JSON schema should include:
+    请以 JSON 格式响应您的决定。只需响应输出的 json 字符串，无需任何交互和解释。
+    JSON 结构应包括：
     {
         "class": 1
     }
 
+# --- 因子可行性与相关性检查提示 ---
 factor_viability_system: |-
-    User has designed several factors in quant investment. Please help the user to check the viability of these factors.
-    These factors are used to build a daily frequency strategy in China A-share market.
+    # 系统提示：检查因子可行性
+    用户在量化投资中设计了几个因子。请帮助用户检查这些因子的可行性。
+    这些因子用于在中国 A 股市场建立日频策略。
 
-    User will provide a pandas dataframe like table containing following information:
-    1. The name of the factor;
-    2. The simple description of the factor;
-    3. The formulation of the factor in latex format;
-    4. The description to the variables and functions in the formulation of the factor.
+    用户将提供一个类似 pandas DataFrame 的表格，其中包含以下信息：
+    1. 因子名称；
+    2. 因子的简单描述；
+    3. 因子的 LaTeX 格式公式；
+    4. 因子公式中变量和函数的描述。
 
-    User has several source data:
-    1. The Stock Trade Data Table containing information about stock trades, such as daily open, close, high, low, vwap prices, volume, and turnover;
-    2. The Financial Data Table containing company financial statements such as the balance sheet, income statement, and cash flow statement;
-    3. The Stock Fundamental Data Table containing basic information about stocks, like total shares outstanding, free float shares, industry classification, market classification, etc;
-    4. The high frequency data containing price and volume of each stock containing open close high low volume vwap in each minute;
-    5. The Consensus Expectations Factor containing the consensus expectations of the analysts about the future performance of the company.
+    用户有以下几个数据源：
+    1. 股票交易数据表，包含股票交易信息，如每日开盘价、收盘价、最高价、最低价、vwap 价格、成交量和换手率；
+    2. 财务数据表，包含公司财务报表，如资产负债表、利润表和现金流量表；
+    3. 股票基本数据表，包含股票的基本信息，如总股本、自由流通股、行业分类、市场分类等；
+    4. 高频数据，包含每只股票每分钟的开盘价、收盘价、最高价、最低价、成交量、vwap；
+    5. 一致性预期因子，包含分析师对公司未来业绩的一致性预期。
 
+    一个可行的因子应满足以下条件：
+    1. 因子能够以日频计算；
+    2. 因子能够基于每只股票进行计算；
+    3. 因子能够基于用户提供的数据源进行计算。
 
-    A viable factor should satisfy the following conditions:
-    1. The factor should be able to be calculated in daily frequency;
-    2. The factor should be able to be calculated based on each stock;
-    3. The factor should be able to be calculated based on the source data provided by user.
+    你应该对用户提供的每个因子给出决定。你应该基于非常可靠的理由拒绝因子。
+    请对可行的因子返回 true，对不可行的因子返回 false。
 
-    You should give decision to each factor provided by the user. You should reject the factor based on very solid reason.
-    Please return true to the viable factor and false to the non-viable factor.
+    注意，由于 token 限制，你可能只能返回部分因子。你的因子名称应与用户的因子名称相同。
 
-    Notice, you can just return part of the factors due to token limit. Your factor name should be the same as the user's factor name.
-
-    Please respond with your decision in JSON format. Just respond the output json string without any interaction and explanation.
-    The JSON schema should include:
+    请以 JSON 格式响应您的决定。只需响应输出的 json 字符串，无需任何交互和解释。
+    JSON 结构应包括：
     {
-        "Name to factor 1":
+        "因子1的名称":
         {
             "viability": true,
-            "reason": "The reason to the viability of this factor"
+            "reason": "该因子可行性的原因"
         },
-        "Name to factor 2":
+        "因子2的名称":
         {
             "viability": false,
-            "reason": "The reason to the non-viability of this factor"
-        }
-        "Name to factor 3":
+            "reason": "该因子不可行性的原因"
+        },
+        "因子3的名称":
         {
             "viability": true,
-            "reason": "The reason to the viability of this factor"
+            "reason": "该因子可行性的原因"
         }
     }
 
 factor_relevance_system: |-
-    User has designed several factors in quant investment. Please help the user to check the relevance of these factors to be real quant investment factors.
-    These factors are used to build a daily frequency strategy in China A-share market.
+    # 系统提示：检查因子相关性
+    用户在量化投资中设计了几个因子。请帮助用户检查这些因子是否与真正的量化投资因子相关。
+    这些因子用于在中国 A 股市场建立日频策略。
 
-    User will provide a pandas dataframe like table containing following information:
-    1. The name of the factor;
-    2. The simple description of the factor;
-    3. The formulation of the factor in latex format;
-    4. The description to the variables and functions in the formulation of the factor.
+    用户将提供一个类似 pandas DataFrame 的表格，其中包含以下信息：
+    1. 因子名称；
+    2. 因子的简单描述；
+    3. 因子的 LaTeX 格式公式；
+    4. 因子公式中变量和函数的描述。
 
-    A relevant factor should satisfy the following conditions:
-    1. The factor should be able to be calculated in daily frequency;
-    2. The factor should be able to be calculated based on each stock;
-    3. The factor should only be calculated based on mathematical manipulation, not based on subjective judgment or natural language analysis.
+    一个相关的因子应满足以下条件：
+    1. 因子能够以日频计算；
+    2. 因子能够基于每只股票进行计算；
+    3. 因子应仅基于数学操作计算，而不是基于主观判断或自然语言分析。
 
-    You should give decision to each factor provided by the user. You should reject the factor based on very solid reason.
-    Please return true to the relevant factor and false to the irrelevant factor.
+    你应该对用户提供的每个因子给出决定。你应该基于非常可靠的理由拒绝因子。
+    请对相关的因子返回 true，对不相关的因子返回 false。
 
-    Notice, you can just return part of the factors due to token limit. Your factor name should be the same as the user's factor name.
+    注意，由于 token 限制，你可能只能返回部分因子。你的因子名称应与用户的因子名称相同。
 
-    Please respond with your decision in JSON format. Just respond the output json string without any interaction and explanation.
-    The JSON schema should include:
+    请以 JSON 格式响应您的决定。只需响应输出的 json 字符串，无需任何交互和解释。
+    JSON 结构应包括：
     {
-        "Name to factor 1":
+        "因子1的名称":
         {
             "relevance": true,
-            "reason": "The reason to the relevance of this factor"
+            "reason": "该因子相关性的原因"
         },
-        "Name to factor 2":
+        "因子2的名称":
         {
             "relevance": false,
-            "reason": "The reason to the non-relevance of this factor"
-        }
-        "Name to factor 3":
+            "reason": "该因子不相关性的原因"
+        },
+        "因子3的名称":
         {
             "relevance": true,
-            "reason": "The reason to the relevance of this factor"
+            "reason": "该因子相关性的原因"
         }
     }
 
 
+# --- 因子去重提示 ---
 factor_duplicate_system: |-
-    User has designed several factors in quant investment. Please help the user to duplicate these factors.
-    These factors are used to build a daily frequency strategy in China A-share market.
+    # 系统提示：因子去重
+    用户在量化投资中设计了几个因子。请帮助用户对这些因子进行去重。
+    这些因子用于在中国 A 股市场建立日频策略。
 
-    User will provide a pandas dataframe like table containing following information:
-    1. The name of the factor;
-    2. The simple description of the factor;
-    3. The formulation of the factor in latex format;
-    4. The description to the variables and functions in the formulation of the factor.
+    用户将提供一个类似 pandas DataFrame 的表格，其中包含以下信息：
+    1. 因子名称；
+    2. 因子的简单描述；
+    3. 因子的 LaTeX 格式公式；
+    4. 因子公式中变量和函数的描述。
 
-    User wants to find whether there are duplicated groups. The factors in a duplicate group should satisfy the following conditions:
-    1. They might differ in the name, description, formulation, or the description to the variables and functions in the formulation, some upper or lower case difference is included;
-    2. They should be talking about exactly the same factor;
-    3. If horizon information like 1 day, 5 days, 10 days, etc is provided, the horizon information should be the same.
+    用户希望找到是否存在重复的组。重复组中的因子应满足以下条件：
+    1. 它们的名称、描述、公式或公式中变量和函数的描述可能不同，包括一些大小写差异；
+    2. 它们应该讨论的是完全相同的因子；
+    3. 如果提供了时间跨度信息，如1天、5天、10天等，则时间跨度信息应相同。
 
-    To make your response valid, we have some very important constraint for you to follow! Listed here:
-    1. You should be very confident to put duplicated factors into a group;
-    2. A group should contain at least two factors;
-    3. To a factor which has no duplication, don't put them into your response;
-    4. To avoid merging too many similar factor, don't put more than ten factors into a group!
-    You should always follow the above constraints to make your response valid. 
+    为了使您的响应有效，我们有一些非常重要的约束需要您遵守！列在此处：
+    1. 你应该非常有信心地将重复的因子放入一个组中；
+    2. 一个组应至少包含两个因子；
+    3. 对于没有重复的因子，不要将它们放入您的响应中；
+    4. 为避免合并太多相似的因子，不要将超过十个因子放入一个组中！
+    你应始终遵循上述约束以使您的响应有效。
 
-    Your response JSON schema should include:
+    您的响应 JSON 结构应包括：
     [
         [
-            "factor name 1",
-            "factor name 2"
+            "因子名称1",
+            "因子名称2"
         ],
         [
-            "factor name 5",
-            "factor name 6"
+            "因子名称5",
+            "因子名称6"
         ],
         [
-            "factor name 7",
-            "factor name 8",
-            "factor name 9"
+            "因子名称7",
+            "因子名称8",
+            "因子名称9"
         ]
     ]
-    Your response is a list of lists. Each list represents a duplicate group containing all the factor names in this group. 
-    The factor names in the list should be unique and the factor names should be the same as the user's factor name.
-    To avoid reaching token limit, don't respond more than fifty groups in one response. You should respond the output json string without any interaction and explanation.
+    您的响应是一个列表的列表。每个列表代表一个重复组，包含该组中所有因子的名称。
+    列表中的因子名称应是唯一的，且因子名称应与用户的因子名称相同。
+    为避免达到 token 限制，一次响应中不要超过五十个组。您应响应输出的 json 字符串，无需任何交互和解释。
