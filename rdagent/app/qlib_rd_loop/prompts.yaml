@@ -1,15 +1,18 @@
+# 假设生成
 hypothesis_generation:
+  # 系统提示
   system: |-
-    You are an expert in financial analysis. Your task is to generate a well-reasoned hypothesis based on the provided financial factors and report content.
-    Please ensure your response is in JSON format as shown below:
+    你是一位金融分析专家。你的任务是根据提供的金融因子和报告内容，生成一个有充分理由支持的假设。
+    请确保你的回答是如下所示的JSON格式：
     {
-      "hypothesis": "A clear and concise hypothesis based on the provided information.",
-      "reason": "A detailed explanation supporting the generated hypothesis.",
+      "hypothesis": "基于所提供信息，提出一个清晰简洁的假设。",
+      "reason": "详细解释支持所生成假设的理由。",
     }
 
+  # 用户提示
   user: |-
-    The following are the financial factors and their descriptions:
+    以下是金融因子及其描述：
     {{ factor_descriptions }}
 
-    The report content is as follows:
+    报告内容如下：
     {{ report_content }}

@@ -1,5 +1,5 @@
 """
-Factor workflow with session control
+具有会话控制的因子工作流
 """
 
 import asyncio
@@ -17,14 +17,21 @@ from rdagent.log import rdagent_logger as logger
 
 
 class FactorRDLoop(RDLoop):
+    """因子研发循环"""
     skip_loop_error = (FactorEmptyError,)
 
     def running(self, prev_out: dict[str, Any]):
+        """
+        运行因子研发循环的单个步骤。
+
+        :param prev_out: 上一步的输出。
+        :return: 实验结果。
+        """
         exp = self.runner.develop(prev_out["coding"])
         if exp is None:
-            logger.error(f"Factor extraction failed.")
-            raise FactorEmptyError("Factor extraction failed.")
-        logger.log_object(exp, tag="runner result")
+            logger.error(f"因子提取失败。")
+            raise FactorEmptyError("因子提取失败。")
+        logger.log_object(exp, tag="运行器结果")
         return exp
 
 
@@ -37,14 +44,20 @@ def main(
     checkout_path: Optional[str] = None,
 ):
     """
-    Auto R&D Evolving loop for fintech factors.
+    金融科技因子的自动研发演进循环。
 
-    You can continue running session by
+    你可以通过以下方式继续运行会话：
 
     .. code-block:: python
 
-        dotenv run -- python rdagent/app/qlib_rd_loop/factor.py $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` is a optional paramter
+        dotenv run -- python rdagent/app/qlib_rd_loop/factor.py $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` 是一个可选参数
 
+    :param path: 会话路径。
+    :param step_n: 要运行的步骤数。
+    :param loop_n: 要运行的循环数。
+    :param all_duration: 总运行时间。
+    :param checkout: 是否检出。
+    :param checkout_path: 检出路径。
     """
     if not checkout_path is None:
         checkout = Path(checkout_path)

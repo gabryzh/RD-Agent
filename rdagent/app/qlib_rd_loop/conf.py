@@ -4,114 +4,118 @@ from rdagent.components.workflow.conf import BasePropSetting
 
 
 class ModelBasePropSetting(BasePropSetting):
+    """模型基础属性设置"""
     model_config = SettingsConfigDict(env_prefix="QLIB_MODEL_", protected_namespaces=())
 
-    # 1) override base settings
+    # 1) 重写基础设置
     scen: str = "rdagent.scenarios.qlib.experiment.model_experiment.QlibModelScenario"
-    """Scenario class for Qlib Model"""
+    """用于Qlib模型的场景类"""
 
     hypothesis_gen: str = "rdagent.scenarios.qlib.proposal.model_proposal.QlibModelHypothesisGen"
-    """Hypothesis generation class"""
+    """假设生成类"""
 
     hypothesis2experiment: str = "rdagent.scenarios.qlib.proposal.model_proposal.QlibModelHypothesis2Experiment"
-    """Hypothesis to experiment class"""
+    """假设到实验的转换类"""
 
     coder: str = "rdagent.scenarios.qlib.developer.model_coder.QlibModelCoSTEER"
-    """Coder class"""
+    """编码器类"""
 
     runner: str = "rdagent.scenarios.qlib.developer.model_runner.QlibModelRunner"
-    """Runner class"""
+    """运行器类"""
 
     summarizer: str = "rdagent.scenarios.qlib.developer.feedback.QlibModelExperiment2Feedback"
-    """Summarizer class"""
+    """摘要器类"""
 
     evolving_n: int = 10
-    """Number of evolutions"""
+    """演进次数"""
 
 
 class FactorBasePropSetting(BasePropSetting):
+    """因子基础属性设置"""
     model_config = SettingsConfigDict(env_prefix="QLIB_FACTOR_", protected_namespaces=())
 
-    # 1) override base settings
+    # 1) 重写基础设置
     scen: str = "rdagent.scenarios.qlib.experiment.factor_experiment.QlibFactorScenario"
-    """Scenario class for Qlib Factor"""
+    """用于Qlib因子的场景类"""
 
     hypothesis_gen: str = "rdagent.scenarios.qlib.proposal.factor_proposal.QlibFactorHypothesisGen"
-    """Hypothesis generation class"""
+    """假设生成类"""
 
     hypothesis2experiment: str = "rdagent.scenarios.qlib.proposal.factor_proposal.QlibFactorHypothesis2Experiment"
-    """Hypothesis to experiment class"""
+    """假设到实验的转换类"""
 
     coder: str = "rdagent.scenarios.qlib.developer.factor_coder.QlibFactorCoSTEER"
-    """Coder class"""
+    """编码器类"""
 
     runner: str = "rdagent.scenarios.qlib.developer.factor_runner.QlibFactorRunner"
-    """Runner class"""
+    """运行器类"""
 
     summarizer: str = "rdagent.scenarios.qlib.developer.feedback.QlibFactorExperiment2Feedback"
-    """Summarizer class"""
+    """摘要器类"""
 
     evolving_n: int = 10
-    """Number of evolutions"""
+    """演进次数"""
 
 
 class FactorFromReportPropSetting(FactorBasePropSetting):
-    # 1) override the scen attribute
+    """从报告中提取因子的属性设置"""
+    # 1) 重写scen属性
     scen: str = "rdagent.scenarios.qlib.experiment.factor_from_report_experiment.QlibFactorFromReportScenario"
-    """Scenario class for Qlib Factor from Report"""
+    """用于从报告中提取Qlib因子的场景类"""
 
-    # 2) sub task specific:
+    # 2) 子任务特定设置:
     report_result_json_file_path: str = "git_ignore_folder/report_list.json"
-    """Path to the JSON file listing research reports for factor extraction"""
+    """列出用于因子提取的研究报告的JSON文件路径"""
 
     max_factors_per_exp: int = 10000
-    """Maximum number of factors implemented per experiment"""
+    """每个实验实现的最大因子数"""
 
     report_limit: int = 10000
-    """Maximum number of reports to process"""
+    """要处理的最大报告数"""
 
 
 class QuantBasePropSetting(BasePropSetting):
+    """量化基础属性设置"""
     model_config = SettingsConfigDict(env_prefix="QLIB_QUANT_", protected_namespaces=())
 
-    # 1) override base settings
+    # 1) 重写基础设置
     scen: str = "rdagent.scenarios.qlib.experiment.quant_experiment.QlibQuantScenario"
-    """Scenario class for Qlib Model"""
+    """用于Qlib模型的场景类"""
 
     quant_hypothesis_gen: str = "rdagent.scenarios.qlib.proposal.quant_proposal.QlibQuantHypothesisGen"
-    """Hypothesis generation class"""
+    """假设生成类"""
 
     model_hypothesis2experiment: str = "rdagent.scenarios.qlib.proposal.model_proposal.QlibModelHypothesis2Experiment"
-    """Hypothesis to experiment class"""
+    """假设到实验的转换类"""
 
     model_coder: str = "rdagent.scenarios.qlib.developer.model_coder.QlibModelCoSTEER"
-    """Coder class"""
+    """编码器类"""
 
     model_runner: str = "rdagent.scenarios.qlib.developer.model_runner.QlibModelRunner"
-    """Runner class"""
+    """运行器类"""
 
     model_summarizer: str = "rdagent.scenarios.qlib.developer.feedback.QlibModelExperiment2Feedback"
-    """Summarizer class"""
+    """摘要器类"""
 
     factor_hypothesis2experiment: str = (
         "rdagent.scenarios.qlib.proposal.factor_proposal.QlibFactorHypothesis2Experiment"
     )
-    """Hypothesis to experiment class"""
+    """假设到实验的转换类"""
 
     factor_coder: str = "rdagent.scenarios.qlib.developer.factor_coder.QlibFactorCoSTEER"
-    """Coder class"""
+    """编码器类"""
 
     factor_runner: str = "rdagent.scenarios.qlib.developer.factor_runner.QlibFactorRunner"
-    """Runner class"""
+    """运行器类"""
 
     factor_summarizer: str = "rdagent.scenarios.qlib.developer.feedback.QlibFactorExperiment2Feedback"
-    """Summarizer class"""
+    """摘要器类"""
 
     evolving_n: int = 10
-    """Number of evolutions"""
+    """演进次数"""
 
     action_selection: str = "bandit"
-    """Action selection strategy: 'bandit' for bandit-based selection, 'llm' for LLM-based selection, 'random' for random selection"""
+    """动作选择策略: 'bandit'表示基于bandit的选择, 'llm'表示基于LLM的选择, 'random'表示随机选择"""
 
 
 FACTOR_PROP_SETTING = FactorBasePropSetting()

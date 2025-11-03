@@ -1,5 +1,5 @@
 """
-Model workflow with session control
+具有会话控制的模型工作流
 """
 
 import asyncio
@@ -12,6 +12,7 @@ from rdagent.core.exception import ModelEmptyError
 
 
 class ModelRDLoop(RDLoop):
+    """模型研发循环"""
     skip_loop_error = (ModelEmptyError,)
 
 
@@ -23,14 +24,19 @@ def main(
     checkout: bool = True,
 ):
     """
-    Auto R&D Evolving loop for fintech models
+    金融科技模型的自动研发演进循环
 
-    You can continue running session by
+    你可以通过以下方式继续运行会话：
 
     .. code-block:: python
 
-        dotenv run -- python rdagent/app/qlib_rd_loop/model.py $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` is a optional paramter
+        dotenv run -- python rdagent.app.qlib_rd_loop.model $LOG_PATH/__session__/1/0_propose  --step_n 1   # `step_n` 是一个可选参数
 
+    :param path: 会话路径。
+    :param step_n: 要运行的步骤数。
+    :param loop_n: 要运行的循环数。
+    :param all_duration: 总运行时间。
+    :param checkout: 是否检出。
     """
     if path is None:
         model_loop = ModelRDLoop(MODEL_PROP_SETTING)
